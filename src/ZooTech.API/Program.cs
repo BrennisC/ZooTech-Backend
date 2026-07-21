@@ -8,6 +8,7 @@ using ZooTech.InterfaceAdapters.Modules.Module_ProduccionLeche.Controllers;
 using ZooTech.InterfaceAdapters.Modules.Module_Vacuno.Controllers;
 using ZooTech.InterfaceAdapters.Modules.Module_Tenancing.Controllers;
 using QuestPDF.Infrastructure;
+using ZooTech.Application.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
 
