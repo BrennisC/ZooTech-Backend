@@ -1,4 +1,3 @@
-using Microsoft.EntityFrameworkCore;
 using ZooTech.Application;
 using ZooTech.Infrastructure;
 using ZooTech.InterfaceAdapters;
@@ -7,7 +6,6 @@ using ZooTech.InterfaceAdapters.Middleware;
 using ZooTech.InterfaceAdapters.Modules.Module_Celo.Controllers;
 using ZooTech.InterfaceAdapters.Modules.Module_ProduccionLeche.Controllers;
 using ZooTech.InterfaceAdapters.Modules.Module_Vacuno.Controllers;
-using ZooTech.Infrastructure.Persistence.Context;
 using ZooTech.InterfaceAdapters.Modules.Module_Tenancing.Controllers;
 using QuestPDF.Infrastructure;
 
@@ -57,7 +55,11 @@ builder.Services.AddMemoryCache();
 // ======= Configuracion CORS =======
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("ProductionCorsPolicy", policy =>
+    string base_domain = builder.Configuration["MultiTenant:BaseDomain"] ?? throw new NullReferenceException(
+                    message: "Missing configuration: MultiTenant:BaseDomain"
+                );
+
+    options.AddPolicy("ZooTechCorsPolicy", policy =>
     {
         policy
             .SetIsOriginAllowed(origin =>
@@ -65,12 +67,12 @@ builder.Services.AddCors(options =>
                 if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri))
                     return false;
 
-                // Produccion: permite zentrycorp.dev y todos sus subdominios
+                // Produccion: permite el dominio definido en variables de entorno y todos sus subdominios
                 var isZentryDomain =
-                    uri.Scheme == "https" &&
+                    uri.Scheme == "http" || uri.Scheme == "https" &&
                     (
-                        uri.Host == "zentrycorp.dev" ||
-                        uri.Host.EndsWith(".zentrycorp.dev")
+                        uri.Host == base_domain ||
+                        uri.Host.EndsWith($".{base_domain}")
                     );
 
                 // Desarrollo local
@@ -82,31 +84,6 @@ builder.Services.AddCors(options =>
                     );
 
                 return isZentryDomain || isLocalhost;
-            })
-            .AllowAnyHeader()
-            .AllowAnyMethod();
-    });
-
-    options.AddPolicy("DevelopmentCorsPolicy", policy =>
-    {
-        policy
-            .SetIsOriginAllowed(origin =>
-            {
-                var uri = new Uri(origin);
-
-                var isZentryDomain =
-                    uri.Host.EndsWith(".zentrycorp.local");
-
-                var isLocal =
-                    uri.Scheme == "http" &&
-                    uri.Port == 4200 &&
-                    (
-                        uri.Host == "localhost" ||
-                        uri.Host == "127.0.0.1" ||
-                        uri.Host.EndsWith(".zentrycorp.local")
-                    );
-
-                return isZentryDomain || isLocal;
             })
             .AllowAnyHeader()
             .AllowAnyMethod()
@@ -153,15 +130,11 @@ if (app.Environment.IsDevelopment())
             "Users API");
     });
 
-    // ======= CORS =======
-    // IMPORTANTE: debe ir antes de TenantResolution, Authentication y Authorization.
-    app.UseCors("DevelopmentCorsPolicy");
 }
-if (app.Environment.IsProduction())
-{
-    app.UseCors("DevelopmentCorsPolicy");
-    // app.UseCors("ProductionCorsPolicy");
-}
+// ======= CORS =======
+// IMPORTANTE: debe ir antes de TenantResolution, Authentication y Authorization.
+
+app.UseCors("ZooTechCorsPolicy");
 
 // ======= Tenant Middleware =======
 app.UseMiddleware<TenantResolutionMiddleware>();

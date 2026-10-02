@@ -1,1429 +1,1362 @@
-/*
-===============================================================================
-ZooTech - Base de datos Tenants
-SQL Server 2025
-===============================================================================
+-- =============================================================================
+-- SISTEMA DE GESTIÓN GANADERA (VACUNOS)
+-- DDL Migrado a T-SQL · SQL Server 2022
+-- Origen: PostgreSQL 15+ · Norma 3FN estricta · Tríada CID · Ley 29733
+-- =============================================================================
 
-Origen:
-    Diagrama DBML de ZooTech.
 
-Objetivo:
-    Crear una base de datos Tenants LIMPIA.
+-- =============================================================================
+-- BLOQUE 1: INFRAESTRUCTURA Y CATÁLOGOS BASE
+-- =============================================================================
 
-Importante:
-    - El modelo original fue expresado con tipos PostgreSQL.
-    - Se adaptaron a SQL Server:
-        boolean   -> bit
-        timestamptz -> datetime2(7)
-        jsonb     -> nvarchar(max) + ISJSON cuando corresponde
-        inet      -> varchar(45)
-        numeric   -> decimal
-    - El diagrama define estructura, no datos iniciales.
-    - Las reglas complejas indicadas como "trigger" o reglas de negocio
-      deberán implementarse posteriormente en la aplicación o mediante
-      triggers específicos.
-
-===============================================================================
-*/
-
-IF DB_ID(N'ZooTechTenants') IS NULL
-BEGIN
-    CREATE DATABASE ZooTechTenants;
-END
-GO
-
-USE ZooTechTenants;
-GO
-
-/*
-===============================================================================
-01. CATÁLOGOS / SEGURIDAD / REPORTES
-===============================================================================
-*/
-
-CREATE TABLE dbo.usuario
-(
-    id              bigint IDENTITY(1,1) NOT NULL,
-    codigo          varchar(15) NOT NULL,
-    nombre_usuario  varchar(50) NOT NULL,
-    nombre_completo varchar(100) NOT NULL,
-    correo          varchar(120) NULL,
-    activo          bit NOT NULL CONSTRAINT DF_usuario_activo DEFAULT 1,
-    created_at      datetime2(7) NOT NULL CONSTRAINT DF_usuario_created_at DEFAULT SYSUTCDATETIME(),
-    updated_at      datetime2(7) NOT NULL CONSTRAINT DF_usuario_updated_at DEFAULT SYSUTCDATETIME(),
-
-    CONSTRAINT PK_usuario PRIMARY KEY (id),
-    CONSTRAINT UQ_usuario_codigo UNIQUE (codigo),
-    CONSTRAINT UQ_usuario_nombre_usuario UNIQUE (nombre_usuario),
-    CONSTRAINT UQ_usuario_correo UNIQUE (correo)
+-- -----------------------------------------------------------------------------
+-- usuario
+-- CID: Confidencialidad — datos personales protegidos por Ley 29733.
+--   Requiere rol: rol_admin, rol_encargado (solo lectura de su propio perfil)
+-- -----------------------------------------------------------------------------
+CREATE TABLE [usuario] (
+    [id]              BIGINT          IDENTITY(1,1) PRIMARY KEY,
+    [codigo]          VARCHAR(15)     NOT NULL,
+    [nombre_usuario]  VARCHAR(50)     NOT NULL,
+    [nombre_completo] VARCHAR(100)    NOT NULL,
+    [correo]          VARCHAR(120),
+    [activo]          BIT             NOT NULL DEFAULT 1,
+    [created_at]      DATETIME2       NOT NULL DEFAULT SYSDATETIME(),
+    [updated_at]      DATETIME2       NOT NULL DEFAULT SYSDATETIME(),
+    CONSTRAINT [uq_usuario_codigo]         UNIQUE ([codigo]),
+    CONSTRAINT [uq_usuario_nombre_usuario] UNIQUE ([nombre_usuario]),
+    CONSTRAINT [uq_usuario_correo]         UNIQUE ([correo])
 );
 GO
 
-CREATE TABLE dbo.cat_modulo
-(
-    code        varchar(40) NOT NULL,
-    nombre      varchar(80) NOT NULL,
-    descripcion varchar(250) NULL,
-    activo      bit NOT NULL CONSTRAINT DF_cat_modulo_activo DEFAULT 1,
+-- CID: Disponibilidad
+CREATE INDEX [idx_usuario_activo] ON [usuario] ([activo]);
+GO
 
-    CONSTRAINT PK_cat_modulo PRIMARY KEY (code),
-    CONSTRAINT UQ_cat_modulo_nombre UNIQUE (nombre)
+
+-- -----------------------------------------------------------------------------
+-- cat_modulo
+-- -----------------------------------------------------------------------------
+CREATE TABLE [cat_modulo] (
+    [code]        VARCHAR(40)     PRIMARY KEY,
+    [nombre]      VARCHAR(80)     NOT NULL,
+    [descripcion] VARCHAR(250),
+    [activo]      BIT             NOT NULL DEFAULT 1,
+    CONSTRAINT [uq_cat_modulo_nombre] UNIQUE ([nombre])
 );
 GO
 
-CREATE TABLE dbo.cat_estado_registro
-(
-    code        varchar(30) NOT NULL,
-    nombre      varchar(50) NOT NULL,
-    descripcion varchar(150) NULL,
 
-    CONSTRAINT PK_cat_estado_registro PRIMARY KEY (code),
-    CONSTRAINT UQ_cat_estado_registro_nombre UNIQUE (nombre)
+-- -----------------------------------------------------------------------------
+-- cat_estado_registro
+-- -----------------------------------------------------------------------------
+CREATE TABLE [cat_estado_registro] (
+    [code]        VARCHAR(30)     PRIMARY KEY,
+    [nombre]      VARCHAR(50)     NOT NULL,
+    [descripcion] VARCHAR(150),
+    CONSTRAINT [uq_cat_estado_registro_nombre] UNIQUE ([nombre])
 );
 GO
 
-CREATE TABLE dbo.cat_formato_reporte
-(
-    code   varchar(10) NOT NULL,
-    nombre varchar(20) NOT NULL,
 
-    CONSTRAINT PK_cat_formato_reporte PRIMARY KEY (code),
-    CONSTRAINT UQ_cat_formato_reporte_nombre UNIQUE (nombre)
+-- -----------------------------------------------------------------------------
+-- cat_formato_reporte
+-- -----------------------------------------------------------------------------
+CREATE TABLE [cat_formato_reporte] (
+    [code]   VARCHAR(10)     PRIMARY KEY,
+    [nombre] VARCHAR(20)     NOT NULL,
+    CONSTRAINT [uq_cat_formato_reporte_nombre] UNIQUE ([nombre])
 );
 GO
 
-CREATE TABLE dbo.cat_tipo_reporte
-(
-    code        varchar(60) NOT NULL,
-    modulo_code varchar(40) NOT NULL,
-    nombre      varchar(120) NOT NULL,
-    descripcion varchar(300) NULL,
-    activo      bit NOT NULL CONSTRAINT DF_cat_tipo_reporte_activo DEFAULT 1,
 
-    CONSTRAINT PK_cat_tipo_reporte PRIMARY KEY (code),
-    CONSTRAINT UQ_cat_tipo_reporte_modulo_nombre
-        UNIQUE (modulo_code, nombre)
+-- -----------------------------------------------------------------------------
+-- cat_tipo_reporte
+-- -----------------------------------------------------------------------------
+CREATE TABLE [cat_tipo_reporte] (
+    [code]        VARCHAR(60)     PRIMARY KEY,
+    [modulo_code] VARCHAR(40)     NOT NULL,
+    [nombre]      VARCHAR(120)    NOT NULL,
+    [descripcion] VARCHAR(300),
+    [activo]      BIT             NOT NULL DEFAULT 1,
+    CONSTRAINT [fk_cat_tipo_reporte_modulo] FOREIGN KEY ([modulo_code])
+        REFERENCES [cat_modulo] ([code]),
+    CONSTRAINT [uq_cat_tipo_reporte_modulo_nombre] UNIQUE ([modulo_code], [nombre])
 );
 GO
 
-CREATE TABLE dbo.archivo
-(
-    id              bigint IDENTITY(1,1) NOT NULL,
-    modulo_code     varchar(40) NOT NULL,
-    nombre_original varchar(150) NOT NULL,
-    nombre_almacenado varchar(150) NOT NULL,
-    ruta_archivo    varchar(max) NOT NULL,
-    extension       varchar(10) NOT NULL,
-    mime_type       varchar(80) NOT NULL,
-    tamano_bytes    bigint NULL,
-    hash_sha256     varchar(64) NULL,
-    creado_por      bigint NULL,
-    created_at      datetime2(7) NOT NULL CONSTRAINT DF_archivo_created_at DEFAULT SYSUTCDATETIME(),
+-- CID: Disponibilidad
+CREATE INDEX [idx_cat_tipo_reporte_modulo] ON [cat_tipo_reporte] ([modulo_code]);
+GO
 
-    CONSTRAINT PK_archivo PRIMARY KEY (id)
+
+-- -----------------------------------------------------------------------------
+-- cat_tipo_archivo  [NUEVA — 3FN-04]
+-- -----------------------------------------------------------------------------
+CREATE TABLE [cat_tipo_archivo] (
+    [extension] VARCHAR(10)     PRIMARY KEY,
+    [mime_type] VARCHAR(80)     NOT NULL
 );
 GO
 
-CREATE TABLE dbo.reporte_descarga
-(
-    id               bigint IDENTITY(1,1) NOT NULL,
-    tipo_reporte_code varchar(60) NOT NULL,
-    formato_code      varchar(10) NOT NULL,
-    fecha_inicio      date NOT NULL,
-    fecha_fin         date NOT NULL,
-    palabra_clave     varchar(50) NULL,
-    filtros           nvarchar(max) NOT NULL,
-    vacuno_id         bigint NULL,
-    archivo_id        bigint NULL,
-    estado            varchar(20) NOT NULL CONSTRAINT DF_reporte_estado DEFAULT 'GENERADO',
-    mensaje           varchar(150) NULL,
-    solicitado_por    bigint NULL,
-    created_at        datetime2(7) NOT NULL CONSTRAINT DF_reporte_created_at DEFAULT SYSUTCDATETIME(),
 
-    CONSTRAINT PK_reporte_descarga PRIMARY KEY (id),
-    CONSTRAINT CK_reporte_descarga_filtros_json CHECK (ISJSON(filtros) = 1)
+-- -----------------------------------------------------------------------------
+-- archivo
+-- CID: Confidencialidad — archivos pueden contener datos médicos/reproductivos.
+--   Requiere rol: rol_admin, rol_encargado (solo sus propios archivos)
+-- -----------------------------------------------------------------------------
+CREATE TABLE [archivo] (
+    [id]                  BIGINT          IDENTITY(1,1) PRIMARY KEY,
+    [modulo_code]         VARCHAR(40)     NOT NULL,
+    [nombre_original]     VARCHAR(150)    NOT NULL,
+    [nombre_almacenado]   VARCHAR(150)    NOT NULL,
+    [ruta_archivo]        NVARCHAR(MAX)   NOT NULL,
+    [extension]           VARCHAR(10)     NOT NULL,
+    [tamano_bytes]        BIGINT,
+    [hash_sha256]         VARCHAR(64),
+    [creado_por]          BIGINT,
+    [created_at]          DATETIME2       NOT NULL DEFAULT SYSDATETIME(),
+    CONSTRAINT [fk_archivo_modulo]     FOREIGN KEY ([modulo_code]) REFERENCES [cat_modulo] ([code]),
+    CONSTRAINT [fk_archivo_extension]  FOREIGN KEY ([extension])   REFERENCES [cat_tipo_archivo] ([extension]),
+    CONSTRAINT [fk_archivo_creado_por] FOREIGN KEY ([creado_por])  REFERENCES [usuario] ([id])
 );
 GO
 
-CREATE TABLE dbo.parametro_sistema
-(
-    id          bigint IDENTITY(1,1) NOT NULL,
-    modulo_code varchar(40) NOT NULL,
-    clave       varchar(80) NOT NULL,
-    valor       varchar(150) NOT NULL,
-    descripcion varchar(250) NULL,
-    vigente     bit NOT NULL CONSTRAINT DF_parametro_vigente DEFAULT 1,
-    created_at  datetime2(7) NOT NULL CONSTRAINT DF_parametro_created_at DEFAULT SYSUTCDATETIME(),
-    updated_at  datetime2(7) NOT NULL CONSTRAINT DF_parametro_updated_at DEFAULT SYSUTCDATETIME(),
+-- CID: Disponibilidad
+CREATE INDEX [idx_archivo_hash]      ON [archivo] ([hash_sha256]);
+CREATE INDEX [idx_archivo_modulo]    ON [archivo] ([modulo_code]);
+CREATE INDEX [idx_archivo_extension] ON [archivo] ([extension]);
+GO
 
-    CONSTRAINT PK_parametro_sistema PRIMARY KEY (id)
+
+-- -----------------------------------------------------------------------------
+-- parametro_sistema
+-- -----------------------------------------------------------------------------
+CREATE TABLE [parametro_sistema] (
+    [id]          BIGINT          IDENTITY(1,1) PRIMARY KEY,
+    [modulo_code] VARCHAR(40)     NOT NULL,
+    [clave]       VARCHAR(80)     NOT NULL,
+    [valor]       VARCHAR(150)    NOT NULL,
+    [descripcion] VARCHAR(250),
+    [created_at]  DATETIME2       NOT NULL DEFAULT SYSDATETIME(),
+    [updated_at]  DATETIME2       NOT NULL DEFAULT SYSDATETIME(),
+    CONSTRAINT [fk_parametro_modulo]       FOREIGN KEY ([modulo_code]) REFERENCES [cat_modulo] ([code]),
+    CONSTRAINT [uq_parametro_modulo_clave] UNIQUE ([modulo_code], [clave])
 );
 GO
 
-CREATE TABLE dbo.bitacora_auditoria
-(
-    id              bigint IDENTITY(1,1) NOT NULL,
-    modulo_code     varchar(40) NOT NULL,
-    entidad         varchar(80) NOT NULL,
-    entidad_id      bigint NOT NULL,
-    accion          varchar(40) NOT NULL,
-    datos_anteriores nvarchar(max) NULL,
-    datos_nuevos    nvarchar(max) NULL,
-    motivo          varchar(250) NULL,
-    usuario_id      bigint NULL,
-    ip_origen       varchar(45) NULL,
-    user_agent      varchar(250) NULL,
-    created_at      datetime2(7) NOT NULL CONSTRAINT DF_bitacora_created_at DEFAULT SYSUTCDATETIME(),
+-- CID: Disponibilidad
+CREATE INDEX [idx_parametro_modulo_clave] ON [parametro_sistema] ([modulo_code], [clave]);
+GO
 
-    CONSTRAINT PK_bitacora_auditoria PRIMARY KEY (id),
-    CONSTRAINT CK_bitacora_datos_anteriores_json
-        CHECK (datos_anteriores IS NULL OR ISJSON(datos_anteriores) = 1),
-    CONSTRAINT CK_bitacora_datos_nuevos_json
-        CHECK (datos_nuevos IS NULL OR ISJSON(datos_nuevos) = 1)
+
+-- -----------------------------------------------------------------------------
+-- bitacora_auditoria
+-- 3FN-10: entidad_id cambiado a VARCHAR para soportar PKs texto.
+-- 1FN-02: datos_anteriores/datos_nuevos como NVARCHAR(MAX) — EXCEPCIÓN JUSTIFICADA.
+-- CID: Confidencialidad — contiene datos personales de todas las entidades.
+--   Requiere rol: rol_admin (solo lectura), prohibido UPDATE/DELETE.
+-- -----------------------------------------------------------------------------
+CREATE TABLE [bitacora_auditoria] (
+    [id]               BIGINT          IDENTITY(1,1) PRIMARY KEY,
+    [modulo_code]      VARCHAR(40)     NOT NULL,
+    [entidad]          VARCHAR(80)     NOT NULL,
+    [entidad_id]       VARCHAR(80)     NOT NULL,
+    [accion]           VARCHAR(40)     NOT NULL,
+    [datos_anteriores] NVARCHAR(MAX),
+    [datos_nuevos]     NVARCHAR(MAX),
+    [motivo]           VARCHAR(250),
+    [usuario_id]       BIGINT,
+    [ip_origen]        NVARCHAR(45),
+    [user_agent]       VARCHAR(250),
+    [created_at]       DATETIME2       NOT NULL DEFAULT SYSDATETIME(),
+    CONSTRAINT [fk_bitacora_modulo]  FOREIGN KEY ([modulo_code]) REFERENCES [cat_modulo] ([code]),
+    CONSTRAINT [fk_bitacora_usuario] FOREIGN KEY ([usuario_id])  REFERENCES [usuario] ([id])
 );
 GO
 
-CREATE TABLE dbo.cat_tipo_responsable
-(
-    code        varchar(30) NOT NULL,
-    nombre      varchar(50) NOT NULL,
-    descripcion varchar(150) NULL,
+-- CID: Disponibilidad
+CREATE INDEX [idx_bitacora_modulo]     ON [bitacora_auditoria] ([modulo_code]);
+CREATE INDEX [idx_bitacora_entidad]    ON [bitacora_auditoria] ([entidad]);
+CREATE INDEX [idx_bitacora_entidad_id] ON [bitacora_auditoria] ([entidad_id]);
+CREATE INDEX [idx_bitacora_usuario]    ON [bitacora_auditoria] ([usuario_id]);
+CREATE INDEX [idx_bitacora_created_at] ON [bitacora_auditoria] ([created_at]);
+GO
 
-    CONSTRAINT PK_cat_tipo_responsable PRIMARY KEY (code),
-    CONSTRAINT UQ_cat_tipo_responsable_nombre UNIQUE (nombre)
+
+-- =============================================================================
+-- BLOQUE 2: RESPONSABLES Y REPOSITORIO DE REPORTES
+-- =============================================================================
+
+-- -----------------------------------------------------------------------------
+-- cat_tipo_responsable
+-- -----------------------------------------------------------------------------
+CREATE TABLE [cat_tipo_responsable] (
+    [code]        VARCHAR(30)     PRIMARY KEY,
+    [nombre]      VARCHAR(50)     NOT NULL,
+    [descripcion] VARCHAR(150),
+    CONSTRAINT [uq_cat_tipo_responsable_nombre] UNIQUE ([nombre])
 );
 GO
 
-CREATE TABLE dbo.responsable
-(
-    id                    bigint IDENTITY(1,1) NOT NULL,
-    usuario_id            bigint NULL,
-    tipo_responsable_code varchar(30) NOT NULL,
-    nombre_completo       varchar(100) NOT NULL,
-    documento             varchar(30) NULL,
-    telefono              varchar(20) NULL,
-    activo                bit NOT NULL CONSTRAINT DF_responsable_activo DEFAULT 1,
-    created_at            datetime2(7) NOT NULL CONSTRAINT DF_responsable_created_at DEFAULT SYSUTCDATETIME(),
 
-    CONSTRAINT PK_responsable PRIMARY KEY (id)
-);
-GO
-
-/*
-===============================================================================
-02. UBICACIÓN / CATÁLOGOS DE VACUNOS
-===============================================================================
-*/
-
-CREATE TABLE dbo.cat_sexo
-(
-    code        varchar(10) NOT NULL,
-    nombre      varchar(15) NOT NULL,
-    descripcion varchar(150) NULL,
-
-    CONSTRAINT PK_cat_sexo PRIMARY KEY (code),
-    CONSTRAINT UQ_cat_sexo_nombre UNIQUE (nombre)
-);
-GO
-
-CREATE TABLE dbo.cat_raza
-(
-    code   varchar(30) NOT NULL,
-    nombre varchar(50) NOT NULL,
-    activo bit NOT NULL CONSTRAINT DF_cat_raza_activo DEFAULT 1,
-
-    CONSTRAINT PK_cat_raza PRIMARY KEY (code),
-    CONSTRAINT UQ_cat_raza_nombre UNIQUE (nombre)
-);
-GO
-
-CREATE TABLE dbo.cat_color
-(
-    id     bigint IDENTITY(1,1) NOT NULL,
-    nombre varchar(15) NOT NULL,
-    activo bit NOT NULL CONSTRAINT DF_cat_color_activo DEFAULT 1,
-
-    CONSTRAINT PK_cat_color PRIMARY KEY (id),
-    CONSTRAINT UQ_cat_color_nombre UNIQUE (nombre)
-);
-GO
-
-CREATE TABLE dbo.cat_tipo_adquisicion
-(
-    code        varchar(30) NOT NULL,
-    nombre      varchar(50) NOT NULL,
-    descripcion varchar(150) NULL,
-    activo      bit NOT NULL CONSTRAINT DF_cat_tipo_adquisicion_activo DEFAULT 1,
-
-    CONSTRAINT PK_cat_tipo_adquisicion PRIMARY KEY (code),
-    CONSTRAINT UQ_cat_tipo_adquisicion_nombre UNIQUE (nombre)
-);
-GO
-
-CREATE TABLE dbo.cat_tipo_utilizacion
-(
-    code        varchar(30) NOT NULL,
-    nombre      varchar(50) NOT NULL,
-    descripcion varchar(150) NULL,
-    activo      bit NOT NULL CONSTRAINT DF_cat_tipo_utilizacion_activo DEFAULT 1,
-
-    CONSTRAINT PK_cat_tipo_utilizacion PRIMARY KEY (code),
-    CONSTRAINT UQ_cat_tipo_utilizacion_nombre UNIQUE (nombre)
-);
-GO
-
-CREATE TABLE dbo.cat_estado_vacuno
-(
-    code        varchar(15) NOT NULL,
-    nombre      varchar(15) NOT NULL,
-    descripcion varchar(150) NULL,
-
-    CONSTRAINT PK_cat_estado_vacuno PRIMARY KEY (code),
-    CONSTRAINT UQ_cat_estado_vacuno_nombre UNIQUE (nombre)
-);
-GO
-
-CREATE TABLE dbo.geo_departamento
-(
-    codigo varchar(2) NOT NULL,
-    nombre varchar(60) NOT NULL,
-
-    CONSTRAINT PK_geo_departamento PRIMARY KEY (codigo),
-    CONSTRAINT UQ_geo_departamento_nombre UNIQUE (nombre)
-);
-GO
-
-CREATE TABLE dbo.geo_provincia
-(
-    codigo               varchar(4) NOT NULL,
-    departamento_codigo  varchar(2) NOT NULL,
-    nombre               varchar(60) NOT NULL,
-
-    CONSTRAINT PK_geo_provincia PRIMARY KEY (codigo),
-    CONSTRAINT UQ_geo_provincia_departamento_nombre
-        UNIQUE (departamento_codigo, nombre)
-);
-GO
-
-CREATE TABLE dbo.geo_distrito
-(
-    codigo          varchar(6) NOT NULL,
-    provincia_codigo varchar(4) NOT NULL,
-    nombre          varchar(60) NOT NULL,
-
-    CONSTRAINT PK_geo_distrito PRIMARY KEY (codigo),
-    CONSTRAINT UQ_geo_distrito_provincia_nombre
-        UNIQUE (provincia_codigo, nombre)
-);
-GO
-
-CREATE TABLE dbo.granja
-(
-    id              bigint IDENTITY(1,1) NOT NULL,
-    nombre          varchar(15) NOT NULL,
-    distrito_codigo varchar(6) NOT NULL,
-    activo          bit NOT NULL CONSTRAINT DF_granja_activo DEFAULT 1,
-    created_at      datetime2(7) NOT NULL CONSTRAINT DF_granja_created_at DEFAULT SYSUTCDATETIME(),
-    updated_at      datetime2(7) NOT NULL CONSTRAINT DF_granja_updated_at DEFAULT SYSUTCDATETIME(),
-
-    CONSTRAINT PK_granja PRIMARY KEY (id),
-    CONSTRAINT UQ_granja_nombre_distrito UNIQUE (nombre, distrito_codigo)
-);
-GO
-
-/*
-===============================================================================
-03. MODULO VACUNOS
-===============================================================================
-*/
-
-CREATE TABLE dbo.vacuno
-(
-    id                       bigint IDENTITY(1,1) NOT NULL,
-    codigo                   varchar(15) NOT NULL,
-    nombre                   varchar(15) NOT NULL,
-    fecha_nacimiento         date NOT NULL,
-    tipo_adquisicion_code    varchar(30) NOT NULL,
-    precio_compra            decimal(12,2) NOT NULL CONSTRAINT DF_vacuno_precio DEFAULT 0,
-    raza_code                varchar(30) NOT NULL,
-    color_id                 bigint NOT NULL,
-    sexo_code                varchar(10) NOT NULL,
-    padre_id                 bigint NULL,
-    madre_id                 bigint NULL,
-    granja_id                bigint NOT NULL,
-    tipo_utilizacion_code    varchar(30) NOT NULL,
-    fecha_registro_utilizacion date NOT NULL,
-    observaciones            varchar(150) NULL,
-    fecha_registro           date NOT NULL,
-    created_by               bigint NULL,
-    updated_by               bigint NULL,
-    deleted_by               bigint NULL,
-    created_at               datetime2(7) NOT NULL CONSTRAINT DF_vacuno_created_at DEFAULT SYSUTCDATETIME(),
-    updated_at               datetime2(7) NOT NULL CONSTRAINT DF_vacuno_updated_at DEFAULT SYSUTCDATETIME(),
-    deleted_at               datetime2(7) NULL,
-    motivo_eliminacion       varchar(250) NULL,
-
-    CONSTRAINT PK_vacuno PRIMARY KEY (id),
-    CONSTRAINT UQ_vacuno_codigo UNIQUE (codigo),
-    CONSTRAINT CK_vacuno_precio CHECK (precio_compra >= 0),
-    CONSTRAINT CK_vacuno_padre_diferente CHECK (padre_id IS NULL OR padre_id <> id),
-    CONSTRAINT CK_vacuno_madre_diferente CHECK (madre_id IS NULL OR madre_id <> id)
-);
-GO
-
-CREATE TABLE dbo.vacuno_foto
-(
-    id           bigint IDENTITY(1,1) NOT NULL,
-    vacuno_id    bigint NOT NULL,
-    archivo_id   bigint NOT NULL,
-    es_principal bit NOT NULL CONSTRAINT DF_vacuno_foto_principal DEFAULT 1,
-    uploaded_by  bigint NULL,
-    created_at   datetime2(7) NOT NULL CONSTRAINT DF_vacuno_foto_created DEFAULT SYSUTCDATETIME(),
-
-    CONSTRAINT PK_vacuno_foto PRIMARY KEY (id)
-);
-GO
-
-CREATE TABLE dbo.vacuno_estado_historial
-(
-    id           bigint IDENTITY(1,1) NOT NULL,
-    vacuno_id    bigint NOT NULL,
-    estado_code  varchar(15) NOT NULL,
-    fecha_estado date NOT NULL,
-    motivo       varchar(150) NULL,
-    vigente      bit NOT NULL CONSTRAINT DF_vacuno_estado_vigente DEFAULT 1,
-    created_by   bigint NULL,
-    created_at   datetime2(7) NOT NULL CONSTRAINT DF_vacuno_estado_created DEFAULT SYSUTCDATETIME(),
-
-    CONSTRAINT PK_vacuno_estado_historial PRIMARY KEY (id)
-);
-GO
-
-CREATE TABLE dbo.incidente_vacuno
-(
-    id                  bigint IDENTITY(1,1) NOT NULL,
-    vacuno_id           bigint NOT NULL,
-    fecha_incidente     date NOT NULL,
-    descripcion         varchar(150) NOT NULL,
-    estado_registro_code varchar(30) NOT NULL CONSTRAINT DF_incidente_estado DEFAULT 'ACTIVO',
-    created_by          bigint NULL,
-    created_at           datetime2(7) NOT NULL CONSTRAINT DF_incidente_created DEFAULT SYSUTCDATETIME(),
-
-    CONSTRAINT PK_incidente_vacuno PRIMARY KEY (id)
-);
-GO
-
-/*
-===============================================================================
-04. PRODUCCIÓN DE LECHE
-===============================================================================
-*/
-
-CREATE TABLE dbo.cat_estado_ordenio
-(
-    code        varchar(30) NOT NULL,
-    nombre      varchar(50) NOT NULL,
-    descripcion varchar(150) NULL,
-
-    CONSTRAINT PK_cat_estado_ordenio PRIMARY KEY (code),
-    CONSTRAINT UQ_cat_estado_ordenio_nombre UNIQUE (nombre)
-);
-GO
-
-CREATE TABLE dbo.ordenio
-(
-    id                    bigint IDENTITY(1,1) NOT NULL,
-    codigo                varchar(15) NOT NULL,
-    fecha_hora            datetime2(7) NOT NULL,
-    vacuno_id             bigint NOT NULL,
-    encargado_usuario_id  bigint NOT NULL,
-    litros                decimal(8,3) NOT NULL,
-    observaciones         varchar(150) NULL,
-    estado_ordenio_code   varchar(30) NOT NULL CONSTRAINT DF_ordenio_estado DEFAULT 'ACTIVO',
-    created_by            bigint NULL,
-    updated_by            bigint NULL,
-    deleted_by            bigint NULL,
-    created_at            datetime2(7) NOT NULL CONSTRAINT DF_ordenio_created DEFAULT SYSUTCDATETIME(),
-    updated_at            datetime2(7) NOT NULL CONSTRAINT DF_ordenio_updated DEFAULT SYSUTCDATETIME(),
-    deleted_at            datetime2(7) NULL,
-    motivo_eliminacion    varchar(250) NULL,
-
-    CONSTRAINT PK_ordenio PRIMARY KEY (id),
-    CONSTRAINT UQ_ordenio_codigo UNIQUE (codigo),
-    CONSTRAINT UQ_ordenio_vacuno_fecha UNIQUE (vacuno_id, fecha_hora),
-    CONSTRAINT CK_ordenio_litros CHECK (litros > 0)
-);
-GO
-
-CREATE TABLE dbo.produccion_leche_estandar
-(
-    id                   bigint IDENTITY(1,1) NOT NULL,
-    vacuno_id            bigint NULL,
-    fecha_inicio         date NOT NULL,
-    fecha_fin            date NULL,
-    litros_esperados_dia decimal(8,3) NOT NULL,
-    descripcion          varchar(150) NULL,
-    activo               bit NOT NULL CONSTRAINT DF_produccion_estandar_activo DEFAULT 1,
-    created_by           bigint NULL,
-    created_at           datetime2(7) NOT NULL CONSTRAINT DF_produccion_estandar_created DEFAULT SYSUTCDATETIME(),
-    updated_at           datetime2(7) NOT NULL CONSTRAINT DF_produccion_estandar_updated DEFAULT SYSUTCDATETIME(),
-
-    CONSTRAINT PK_produccion_leche_estandar PRIMARY KEY (id),
-    CONSTRAINT CK_produccion_estandar_litros CHECK (litros_esperados_dia > 0),
-    CONSTRAINT CK_produccion_estandar_fechas CHECK (fecha_fin IS NULL OR fecha_fin >= fecha_inicio)
-);
-GO
-
-CREATE TABLE dbo.cat_estado_sequia
-(
-    code        varchar(30) NOT NULL,
-    nombre      varchar(50) NOT NULL,
-    descripcion varchar(150) NULL,
-
-    CONSTRAINT PK_cat_estado_sequia PRIMARY KEY (code),
-    CONSTRAINT UQ_cat_estado_sequia_nombre UNIQUE (nombre)
-);
-GO
-
-CREATE TABLE dbo.periodo_sequia
-(
-    id                 bigint IDENTITY(1,1) NOT NULL,
-    vacuno_id          bigint NOT NULL,
-    fecha_inicio       date NOT NULL,
-    fecha_fin_estimada date NULL,
-    fecha_fin_real     date NULL,
-    estado_sequia_code varchar(30) NOT NULL,
-    motivo             varchar(150) NULL,
-    observaciones      varchar(150) NULL,
-    created_by         bigint NULL,
-    updated_by         bigint NULL,
-    created_at         datetime2(7) NOT NULL CONSTRAINT DF_periodo_sequia_created DEFAULT SYSUTCDATETIME(),
-    updated_at         datetime2(7) NOT NULL CONSTRAINT DF_periodo_sequia_updated DEFAULT SYSUTCDATETIME(),
-
-    CONSTRAINT PK_periodo_sequia PRIMARY KEY (id)
-);
-GO
-
-/*
-===============================================================================
-05. SANIDAD / TRIAJE
-===============================================================================
-*/
-
-CREATE TABLE dbo.cat_tipo_peso
-(
-    code        varchar(30) NOT NULL,
-    nombre      varchar(50) NOT NULL,
-    descripcion varchar(150) NULL,
-    activo      bit NOT NULL CONSTRAINT DF_cat_tipo_peso_activo DEFAULT 1,
-
-    CONSTRAINT PK_cat_tipo_peso PRIMARY KEY (code),
-    CONSTRAINT UQ_cat_tipo_peso_nombre UNIQUE (nombre)
-);
-GO
-
-CREATE TABLE dbo.triaje
-(
-    id                    bigint IDENTITY(1,1) NOT NULL,
-    codigo                varchar(15) NOT NULL,
-    fecha_hora            datetime2(7) NOT NULL,
-    vacuno_id             bigint NOT NULL,
-    tipo_peso_code        varchar(30) NOT NULL,
-    peso_kg               decimal(8,2) NOT NULL,
-    observaciones         varchar(150) NULL,
-    estado_registro_code  varchar(30) NOT NULL CONSTRAINT DF_triaje_estado DEFAULT 'ACTIVO',
-    encargado_usuario_id  bigint NULL,
-    created_by            bigint NULL,
-    updated_by            bigint NULL,
-    deleted_by            bigint NULL,
-    created_at            datetime2(7) NOT NULL CONSTRAINT DF_triaje_created DEFAULT SYSUTCDATETIME(),
-    updated_at            datetime2(7) NOT NULL CONSTRAINT DF_triaje_updated DEFAULT SYSUTCDATETIME(),
-    deleted_at            datetime2(7) NULL,
-    motivo_eliminacion    varchar(250) NULL,
-
-    CONSTRAINT PK_triaje PRIMARY KEY (id),
-    CONSTRAINT UQ_triaje_codigo UNIQUE (codigo),
-    CONSTRAINT UQ_triaje_vacuno_fecha_tipo UNIQUE (vacuno_id, fecha_hora, tipo_peso_code),
-    CONSTRAINT CK_triaje_peso CHECK (peso_kg > 0)
-);
-GO
-
-/*
-===============================================================================
-06. REPRODUCCIÓN / CELO
-===============================================================================
-*/
-
-CREATE TABLE dbo.celo_configuracion
-(
-    id                       bigint IDENTITY(1,1) NOT NULL,
-    nombre                   varchar(80) NOT NULL,
-    dias_ciclo_estandar      int NOT NULL,
-    dias_alerta_previa       int NOT NULL,
-    dias_tolerancia_posterior int NOT NULL,
-    activo                   bit NOT NULL CONSTRAINT DF_celo_config_activo DEFAULT 1,
-    created_by               bigint NULL,
-    created_at               datetime2(7) NOT NULL CONSTRAINT DF_celo_config_created DEFAULT SYSUTCDATETIME(),
-    updated_at               datetime2(7) NOT NULL CONSTRAINT DF_celo_config_updated DEFAULT SYSUTCDATETIME(),
-
-    CONSTRAINT PK_celo_configuracion PRIMARY KEY (id),
-    CONSTRAINT CK_celo_config_dias CHECK (
-        dias_ciclo_estandar > 0
-        AND dias_alerta_previa >= 0
-        AND dias_tolerancia_posterior >= 0
-    )
-);
-GO
-
-CREATE TABLE dbo.cat_estado_celo
-(
-    code        varchar(30) NOT NULL,
-    nombre      varchar(50) NOT NULL,
-    descripcion varchar(150) NULL,
-
-    CONSTRAINT PK_cat_estado_celo PRIMARY KEY (code),
-    CONSTRAINT UQ_cat_estado_celo_nombre UNIQUE (nombre)
-);
-GO
-
-CREATE TABLE dbo.cat_caracteristica_celo
-(
-    id          bigint IDENTITY(1,1) NOT NULL,
-    nombre      varchar(50) NOT NULL,
-    descripcion varchar(150) NULL,
-    activo      bit NOT NULL CONSTRAINT DF_cat_caracteristica_celo_activo DEFAULT 1,
-
-    CONSTRAINT PK_cat_caracteristica_celo PRIMARY KEY (id),
-    CONSTRAINT UQ_cat_caracteristica_celo_nombre UNIQUE (nombre)
-);
-GO
-
-CREATE TABLE dbo.celo_registro
-(
-    id                   bigint IDENTITY(1,1) NOT NULL,
-    codigo               varchar(15) NOT NULL,
-    fecha_hora           datetime2(7) NOT NULL,
-    vacuno_id            bigint NOT NULL,
-    encargado_usuario_id bigint NOT NULL,
-    observaciones        varchar(150) NULL,
-    estado_registro_code varchar(30) NOT NULL CONSTRAINT DF_celo_registro_estado DEFAULT 'ACTIVO',
-    created_by           bigint NULL,
-    updated_by           bigint NULL,
-    deleted_by           bigint NULL,
-    created_at           datetime2(7) NOT NULL CONSTRAINT DF_celo_registro_created DEFAULT SYSUTCDATETIME(),
-    updated_at           datetime2(7) NOT NULL CONSTRAINT DF_celo_registro_updated DEFAULT SYSUTCDATETIME(),
-    deleted_at           datetime2(7) NULL,
-    motivo_eliminacion   varchar(250) NULL,
-
-    CONSTRAINT PK_celo_registro PRIMARY KEY (id),
-    CONSTRAINT UQ_celo_registro_codigo UNIQUE (codigo),
-    CONSTRAINT UQ_celo_registro_vacuno_fecha UNIQUE (vacuno_id, fecha_hora)
-);
-GO
-
-CREATE TABLE dbo.celo_registro_caracteristica
-(
-    id               bigint IDENTITY(1,1) NOT NULL,
-    celo_registro_id bigint NOT NULL,
-    caracteristica_id bigint NOT NULL,
-
-    CONSTRAINT PK_celo_registro_caracteristica PRIMARY KEY (id),
-    CONSTRAINT UQ_celo_registro_caracteristica
-        UNIQUE (celo_registro_id, caracteristica_id)
-);
-GO
-
-CREATE TABLE dbo.celo_registro_caracteristica_libre
-(
-    id               bigint IDENTITY(1,1) NOT NULL,
-    celo_registro_id bigint NOT NULL,
-    descripcion      varchar(80) NOT NULL,
-    created_at       datetime2(7) NOT NULL CONSTRAINT DF_celo_caracteristica_libre_created DEFAULT SYSUTCDATETIME(),
-
-    CONSTRAINT PK_celo_registro_caracteristica_libre PRIMARY KEY (id)
-);
-GO
-
-CREATE TABLE dbo.celo_estado_vacuno
-(
-    vacuno_id                 bigint NOT NULL,
-    estado_celo_code          varchar(30) NOT NULL,
-    fecha_ultimo_celo         date NULL,
-    fecha_proximo_celo_estimada date NULL,
-    dias_restantes            int NULL,
-    veces_celo                int NOT NULL CONSTRAINT DF_celo_estado_veces DEFAULT 0,
-    crias                     int NOT NULL CONSTRAINT DF_celo_estado_crias DEFAULT 0,
-    calculated_at             datetime2(7) NOT NULL CONSTRAINT DF_celo_estado_calculated DEFAULT SYSUTCDATETIME(),
-
-    CONSTRAINT PK_celo_estado_vacuno PRIMARY KEY (vacuno_id),
-    CONSTRAINT CK_celo_estado_contadores CHECK (veces_celo >= 0 AND crias >= 0)
-);
-GO
-
-/*
-===============================================================================
-07. REPRODUCCIÓN / FECUNDACIÓN
-===============================================================================
-*/
-
-CREATE TABLE dbo.cat_tipo_fecundacion
-(
-    code        varchar(40) NOT NULL,
-    nombre      varchar(80) NOT NULL,
-    descripcion varchar(200) NULL,
-
-    CONSTRAINT PK_cat_tipo_fecundacion PRIMARY KEY (code),
-    CONSTRAINT UQ_cat_tipo_fecundacion_nombre UNIQUE (nombre)
-);
-GO
-
-CREATE TABLE dbo.cat_resultado_fecundacion
-(
-    code        varchar(30) NOT NULL,
-    nombre      varchar(60) NOT NULL,
-    descripcion varchar(150) NULL,
-
-    CONSTRAINT PK_cat_resultado_fecundacion PRIMARY KEY (code),
-    CONSTRAINT UQ_cat_resultado_fecundacion_nombre UNIQUE (nombre)
-);
-GO
-
-CREATE TABLE dbo.cat_estado_fecundacion_vacuno
-(
-    code        varchar(30) NOT NULL,
-    nombre      varchar(60) NOT NULL,
-    descripcion varchar(150) NULL,
-
-    CONSTRAINT PK_cat_estado_fecundacion_vacuno PRIMARY KEY (code),
-    CONSTRAINT UQ_cat_estado_fecundacion_vacuno_nombre UNIQUE (nombre)
-);
-GO
-
-CREATE TABLE dbo.cat_estado_trazabilidad
-(
-    code        varchar(30) NOT NULL,
-    nombre      varchar(60) NOT NULL,
-    descripcion varchar(150) NULL,
-
-    CONSTRAINT PK_cat_estado_trazabilidad PRIMARY KEY (code),
-    CONSTRAINT UQ_cat_estado_trazabilidad_nombre UNIQUE (nombre)
-);
-GO
-
-CREATE TABLE dbo.reproductor_externo
-(
-    id             bigint IDENTITY(1,1) NOT NULL,
-    nombre         varchar(100) NOT NULL,
-    codigo_externo varchar(50) NULL,
-    sexo_code      varchar(10) NULL,
-    descripcion    varchar(150) NULL,
-    activo         bit NOT NULL CONSTRAINT DF_reproductor_externo_activo DEFAULT 1,
-    created_by     bigint NULL,
-    created_at     datetime2(7) NOT NULL CONSTRAINT DF_reproductor_externo_created DEFAULT SYSUTCDATETIME(),
-
-    CONSTRAINT PK_reproductor_externo PRIMARY KEY (id)
-);
-GO
-
-CREATE TABLE dbo.fecundacion
-(
-    id                     bigint IDENTITY(1,1) NOT NULL,
-    codigo                 varchar(15) NOT NULL,
-    tipo_fecundacion_code  varchar(40) NOT NULL,
-    vacuno_receptor_id     bigint NOT NULL,
-    donante_vacuno_id      bigint NULL,
-    donante_externo_id     bigint NULL,
-    celo_registro_id       bigint NULL,
-    fecha_procedimiento    date NOT NULL,
-    responsable_id         bigint NOT NULL,
-    resultado_code         varchar(30) NOT NULL,
-    codigo_semen           varchar(30) NULL,
-    codigo_embrion         varchar(30) NULL,
-    observaciones_veterinarias varchar(250) NULL,
-    created_by             bigint NULL,
-    updated_by             bigint NULL,
-    created_at             datetime2(7) NOT NULL CONSTRAINT DF_fecundacion_created DEFAULT SYSUTCDATETIME(),
-    updated_at             datetime2(7) NOT NULL CONSTRAINT DF_fecundacion_updated DEFAULT SYSUTCDATETIME(),
-
-    CONSTRAINT PK_fecundacion PRIMARY KEY (id),
-    CONSTRAINT UQ_fecundacion_codigo UNIQUE (codigo),
-    CONSTRAINT CK_fecundacion_un_donante CHECK (
-        (donante_vacuno_id IS NOT NULL AND donante_externo_id IS NULL)
+-- -----------------------------------------------------------------------------
+-- responsable
+-- 3FN-03: nombre_completo ahora NULLABLE.
+-- CID: Confidencialidad — datos personales. Requiere rol: rol_admin, rol_veterinario.
+-- -----------------------------------------------------------------------------
+CREATE TABLE [responsable] (
+    [id]                    BIGINT          IDENTITY(1,1) PRIMARY KEY,
+    [usuario_id]            BIGINT,
+    [tipo_responsable_code] VARCHAR(30)     NOT NULL,
+    [nombre_completo]       VARCHAR(100),
+    [documento]             VARCHAR(30),
+    [telefono]              VARCHAR(20),
+    [activo]                BIT             NOT NULL DEFAULT 1,
+    [created_at]            DATETIME2       NOT NULL DEFAULT SYSDATETIME(),
+    CONSTRAINT [fk_responsable_usuario] FOREIGN KEY ([usuario_id])
+        REFERENCES [usuario] ([id]),
+    CONSTRAINT [fk_responsable_tipo] FOREIGN KEY ([tipo_responsable_code])
+        REFERENCES [cat_tipo_responsable] ([code]),
+    -- 3FN-03: nombre_completo solo si es externo (usuario_id IS NULL)
+    CONSTRAINT [ck_responsable_nombre_externo] CHECK (
+        ([usuario_id] IS NULL     AND [nombre_completo] IS NOT NULL)
         OR
-        (donante_vacuno_id IS NULL AND donante_externo_id IS NOT NULL)
+        ([usuario_id] IS NOT NULL AND [nombre_completo] IS NULL)
     )
 );
 GO
 
-CREATE TABLE dbo.fecundacion_cria
-(
-    id                      bigint IDENTITY(1,1) NOT NULL,
-    fecundacion_id          bigint NOT NULL,
-    vacuno_hijo_id          bigint NOT NULL,
-    estado_trazabilidad_code varchar(30) NOT NULL CONSTRAINT DF_fecundacion_cria_estado DEFAULT 'VALIDA',
-    fecha_vinculacion       date NOT NULL,
-    observaciones           varchar(150) NULL,
-    created_by              bigint NULL,
-    updated_by              bigint NULL,
-    created_at              datetime2(7) NOT NULL CONSTRAINT DF_fecundacion_cria_created DEFAULT SYSUTCDATETIME(),
+-- CID: Disponibilidad
+CREATE INDEX [idx_responsable_usuario] ON [responsable] ([usuario_id]);
+CREATE INDEX [idx_responsable_tipo]    ON [responsable] ([tipo_responsable_code]);
+GO
 
-    CONSTRAINT PK_fecundacion_cria PRIMARY KEY (id),
-    CONSTRAINT UQ_fecundacion_cria UNIQUE (fecundacion_id, vacuno_hijo_id)
+
+-- -----------------------------------------------------------------------------
+-- reporte_descarga
+-- 1FN-01: filtros jsonb eliminado → columnas atómicas discretas.
+-- 3FN-09: estado ahora FK a cat_estado_registro.
+-- -----------------------------------------------------------------------------
+CREATE TABLE [reporte_descarga] (
+    [id]                   BIGINT          IDENTITY(1,1) PRIMARY KEY,
+    [tipo_reporte_code]    VARCHAR(60)     NOT NULL,
+    [formato_code]         VARCHAR(10)     NOT NULL,
+    [filtro_fecha_inicio]  DATE,
+    [filtro_fecha_fin]     DATE,
+    [filtro_vacuno_id]     BIGINT,
+    [filtro_granja_id]     BIGINT,
+    [filtro_raza_code]     VARCHAR(30),
+    [filtro_palabra_clave] VARCHAR(100),
+    [archivo_id]           BIGINT,
+    [estado_code]          VARCHAR(30)     NOT NULL DEFAULT 'ACTIVO',
+    [mensaje]              VARCHAR(150),
+    [solicitado_por]       BIGINT,
+    [created_at]           DATETIME2       NOT NULL DEFAULT SYSDATETIME(),
+    CONSTRAINT [fk_reporte_tipo_reporte]   FOREIGN KEY ([tipo_reporte_code]) REFERENCES [cat_tipo_reporte] ([code]),
+    CONSTRAINT [fk_reporte_formato]        FOREIGN KEY ([formato_code])      REFERENCES [cat_formato_reporte] ([code]),
+    CONSTRAINT [fk_reporte_archivo]        FOREIGN KEY ([archivo_id])        REFERENCES [archivo] ([id]),
+    CONSTRAINT [fk_reporte_estado]         FOREIGN KEY ([estado_code])       REFERENCES [cat_estado_registro] ([code]),
+    CONSTRAINT [fk_reporte_solicitado_por] FOREIGN KEY ([solicitado_por])    REFERENCES [usuario] ([id]),
+    -- CID: Integridad — rango de fechas coherente
+    CONSTRAINT [ck_reporte_fechas] CHECK (
+        [filtro_fecha_inicio] IS NULL
+        OR [filtro_fecha_fin] IS NULL
+        OR [filtro_fecha_inicio] <= [filtro_fecha_fin]
+    )
 );
 GO
 
-CREATE TABLE dbo.vacuno_estado_fecundacion_historial
-(
-    id                     bigint IDENTITY(1,1) NOT NULL,
-    vacuno_id              bigint NOT NULL,
-    estado_fecundacion_code varchar(30) NOT NULL,
-    fecundacion_id         bigint NULL,
-    fecha_actualizacion    date NOT NULL,
-    observaciones          varchar(150) NULL,
-    vigente                bit NOT NULL CONSTRAINT DF_vacuno_estado_fec_vigente DEFAULT 1,
-    created_by             bigint NULL,
-    deleted_by             bigint NULL,
-    created_at             datetime2(7) NOT NULL CONSTRAINT DF_vacuno_estado_fec_created DEFAULT SYSUTCDATETIME(),
-    deleted_at             datetime2(7) NULL,
-    motivo_eliminacion     varchar(250) NULL,
+-- CID: Disponibilidad
+CREATE INDEX [idx_reporte_tipo]       ON [reporte_descarga] ([tipo_reporte_code]);
+CREATE INDEX [idx_reporte_formato]    ON [reporte_descarga] ([formato_code]);
+CREATE INDEX [idx_reporte_vacuno]     ON [reporte_descarga] ([filtro_vacuno_id]);
+CREATE INDEX [idx_reporte_granja]     ON [reporte_descarga] ([filtro_granja_id]);
+CREATE INDEX [idx_reporte_solicitado] ON [reporte_descarga] ([solicitado_por]);
+CREATE INDEX [idx_reporte_fechas]     ON [reporte_descarga] ([filtro_fecha_inicio], [filtro_fecha_fin]);
+CREATE INDEX [idx_reporte_estado]     ON [reporte_descarga] ([estado_code]);
+GO
 
-    CONSTRAINT PK_vacuno_estado_fec_historial PRIMARY KEY (id)
+
+-- =============================================================================
+-- BLOQUE 3: CATÁLOGOS DE VACUNO Y GEOGRAFÍA
+-- =============================================================================
+
+-- -----------------------------------------------------------------------------
+-- cat_sexo
+-- -----------------------------------------------------------------------------
+CREATE TABLE [cat_sexo] (
+    [code]        VARCHAR(10)     PRIMARY KEY,
+    [nombre]      VARCHAR(15)     NOT NULL,
+    [descripcion] VARCHAR(150),
+    CONSTRAINT [uq_cat_sexo_nombre] UNIQUE ([nombre])
 );
 GO
 
-/*
-===============================================================================
-08. ÍNDICES
-===============================================================================
-*/
 
-CREATE INDEX IX_archivo_hash_sha256 ON dbo.archivo(hash_sha256);
-CREATE INDEX IX_archivo_modulo ON dbo.archivo(modulo_code);
-
-CREATE INDEX IX_reporte_tipo ON dbo.reporte_descarga(tipo_reporte_code);
-CREATE INDEX IX_reporte_formato ON dbo.reporte_descarga(formato_code);
-CREATE INDEX IX_reporte_vacuno ON dbo.reporte_descarga(vacuno_id);
-CREATE INDEX IX_reporte_solicitado_por ON dbo.reporte_descarga(solicitado_por);
-CREATE INDEX IX_reporte_fechas ON dbo.reporte_descarga(fecha_inicio, fecha_fin);
-
-CREATE INDEX IX_parametro_modulo_clave_vigente
-    ON dbo.parametro_sistema(modulo_code, clave, vigente);
-
-CREATE INDEX IX_bitacora_modulo ON dbo.bitacora_auditoria(modulo_code);
-CREATE INDEX IX_bitacora_entidad ON dbo.bitacora_auditoria(entidad);
-CREATE INDEX IX_bitacora_entidad_id ON dbo.bitacora_auditoria(entidad_id);
-CREATE INDEX IX_bitacora_usuario ON dbo.bitacora_auditoria(usuario_id);
-CREATE INDEX IX_bitacora_created_at ON dbo.bitacora_auditoria(created_at);
-
-CREATE INDEX IX_responsable_usuario ON dbo.responsable(usuario_id);
-CREATE INDEX IX_responsable_tipo ON dbo.responsable(tipo_responsable_code);
-CREATE INDEX IX_responsable_nombre ON dbo.responsable(nombre_completo);
-
-CREATE INDEX IX_geo_provincia_departamento ON dbo.geo_provincia(departamento_codigo);
-CREATE INDEX IX_geo_distrito_provincia ON dbo.geo_distrito(provincia_codigo);
-CREATE INDEX IX_granja_distrito ON dbo.granja(distrito_codigo);
-
-CREATE INDEX IX_vacuno_nombre ON dbo.vacuno(nombre);
-CREATE INDEX IX_vacuno_fecha_nacimiento ON dbo.vacuno(fecha_nacimiento);
-CREATE INDEX IX_vacuno_raza ON dbo.vacuno(raza_code);
-CREATE INDEX IX_vacuno_sexo ON dbo.vacuno(sexo_code);
-CREATE INDEX IX_vacuno_granja ON dbo.vacuno(granja_id);
-CREATE INDEX IX_vacuno_padre ON dbo.vacuno(padre_id);
-CREATE INDEX IX_vacuno_madre ON dbo.vacuno(madre_id);
-CREATE INDEX IX_vacuno_fecha_registro ON dbo.vacuno(fecha_registro);
-CREATE INDEX IX_vacuno_deleted_at ON dbo.vacuno(deleted_at);
-
-CREATE INDEX IX_vacuno_foto_vacuno ON dbo.vacuno_foto(vacuno_id);
-CREATE INDEX IX_vacuno_foto_archivo ON dbo.vacuno_foto(archivo_id);
-
-CREATE INDEX IX_vacuno_estado_vacuno ON dbo.vacuno_estado_historial(vacuno_id);
-CREATE INDEX IX_vacuno_estado_code ON dbo.vacuno_estado_historial(estado_code);
-CREATE INDEX IX_vacuno_estado_fecha ON dbo.vacuno_estado_historial(fecha_estado);
-CREATE INDEX IX_vacuno_estado_vigente ON dbo.vacuno_estado_historial(vigente);
-
-CREATE INDEX IX_incidente_vacuno ON dbo.incidente_vacuno(vacuno_id);
-CREATE INDEX IX_incidente_fecha ON dbo.incidente_vacuno(fecha_incidente);
-CREATE INDEX IX_incidente_estado ON dbo.incidente_vacuno(estado_registro_code);
-
-CREATE INDEX IX_ordenio_fecha ON dbo.ordenio(fecha_hora);
-CREATE INDEX IX_ordenio_vacuno ON dbo.ordenio(vacuno_id);
-CREATE INDEX IX_ordenio_encargado ON dbo.ordenio(encargado_usuario_id);
-CREATE INDEX IX_ordenio_estado ON dbo.ordenio(estado_ordenio_code);
-CREATE INDEX IX_ordenio_deleted ON dbo.ordenio(deleted_at);
-
-CREATE INDEX IX_produccion_estandar_vacuno ON dbo.produccion_leche_estandar(vacuno_id);
-CREATE INDEX IX_produccion_estandar_inicio ON dbo.produccion_leche_estandar(fecha_inicio);
-CREATE INDEX IX_produccion_estandar_fin ON dbo.produccion_leche_estandar(fecha_fin);
-CREATE INDEX IX_produccion_estandar_activo ON dbo.produccion_leche_estandar(activo);
-
-CREATE INDEX IX_periodo_sequia_vacuno ON dbo.periodo_sequia(vacuno_id);
-CREATE INDEX IX_periodo_sequia_inicio ON dbo.periodo_sequia(fecha_inicio);
-CREATE INDEX IX_periodo_sequia_fin_estimada ON dbo.periodo_sequia(fecha_fin_estimada);
-CREATE INDEX IX_periodo_sequia_fin_real ON dbo.periodo_sequia(fecha_fin_real);
-CREATE INDEX IX_periodo_sequia_estado ON dbo.periodo_sequia(estado_sequia_code);
-
-CREATE INDEX IX_triaje_fecha ON dbo.triaje(fecha_hora);
-CREATE INDEX IX_triaje_vacuno ON dbo.triaje(vacuno_id);
-CREATE INDEX IX_triaje_tipo ON dbo.triaje(tipo_peso_code);
-CREATE INDEX IX_triaje_peso ON dbo.triaje(peso_kg);
-CREATE INDEX IX_triaje_estado ON dbo.triaje(estado_registro_code);
-CREATE INDEX IX_triaje_deleted ON dbo.triaje(deleted_at);
-
-CREATE INDEX IX_celo_config_activo ON dbo.celo_configuracion(activo);
-
-CREATE INDEX IX_celo_registro_fecha ON dbo.celo_registro(fecha_hora);
-CREATE INDEX IX_celo_registro_vacuno ON dbo.celo_registro(vacuno_id);
-CREATE INDEX IX_celo_registro_encargado ON dbo.celo_registro(encargado_usuario_id);
-CREATE INDEX IX_celo_registro_estado ON dbo.celo_registro(estado_registro_code);
-CREATE INDEX IX_celo_registro_deleted ON dbo.celo_registro(deleted_at);
-
-CREATE INDEX IX_celo_caracteristica_libre_registro
-    ON dbo.celo_registro_caracteristica_libre(celo_registro_id);
-
-CREATE INDEX IX_celo_estado_vacuno_estado
-    ON dbo.celo_estado_vacuno(estado_celo_code);
-
-CREATE INDEX IX_celo_estado_vacuno_proximo
-    ON dbo.celo_estado_vacuno(fecha_proximo_celo_estimada);
-
-CREATE INDEX IX_reproductor_externo_nombre ON dbo.reproductor_externo(nombre);
-CREATE INDEX IX_reproductor_externo_codigo ON dbo.reproductor_externo(codigo_externo);
-
-CREATE INDEX IX_fecundacion_tipo ON dbo.fecundacion(tipo_fecundacion_code);
-CREATE INDEX IX_fecundacion_receptor ON dbo.fecundacion(vacuno_receptor_id);
-CREATE INDEX IX_fecundacion_donante_vacuno ON dbo.fecundacion(donante_vacuno_id);
-CREATE INDEX IX_fecundacion_donante_externo ON dbo.fecundacion(donante_externo_id);
-CREATE INDEX IX_fecundacion_celo ON dbo.fecundacion(celo_registro_id);
-CREATE INDEX IX_fecundacion_fecha ON dbo.fecundacion(fecha_procedimiento);
-CREATE INDEX IX_fecundacion_responsable ON dbo.fecundacion(responsable_id);
-CREATE INDEX IX_fecundacion_resultado ON dbo.fecundacion(resultado_code);
-
-CREATE INDEX IX_fecundacion_cria_fecundacion
-    ON dbo.fecundacion_cria(fecundacion_id);
-
-CREATE INDEX IX_fecundacion_cria_vacuno
-    ON dbo.fecundacion_cria(vacuno_hijo_id);
-
-CREATE INDEX IX_fecundacion_cria_estado
-    ON dbo.fecundacion_cria(estado_trazabilidad_code);
-
-CREATE INDEX IX_vacuno_estado_fec_vacuno
-    ON dbo.vacuno_estado_fecundacion_historial(vacuno_id);
-
-CREATE INDEX IX_vacuno_estado_fec_estado
-    ON dbo.vacuno_estado_fecundacion_historial(estado_fecundacion_code);
-
-CREATE INDEX IX_vacuno_estado_fec_fecundacion
-    ON dbo.vacuno_estado_fecundacion_historial(fecundacion_id);
-
-CREATE INDEX IX_vacuno_estado_fec_fecha
-    ON dbo.vacuno_estado_fecundacion_historial(fecha_actualizacion);
-
-CREATE INDEX IX_vacuno_estado_fec_vigente
-    ON dbo.vacuno_estado_fecundacion_historial(vigente);
-
-CREATE INDEX IX_vacuno_estado_fec_deleted
-    ON dbo.vacuno_estado_fecundacion_historial(deleted_at);
+-- -----------------------------------------------------------------------------
+-- cat_raza
+-- -----------------------------------------------------------------------------
+CREATE TABLE [cat_raza] (
+    [code]   VARCHAR(30)     PRIMARY KEY,
+    [nombre] VARCHAR(50)     NOT NULL,
+    [activo] BIT             NOT NULL DEFAULT 1,
+    CONSTRAINT [uq_cat_raza_nombre] UNIQUE ([nombre])
+);
 GO
 
-/*
-===============================================================================
-09. FOREIGN KEYS
-===============================================================================
-*/
 
-ALTER TABLE dbo.archivo
-ADD CONSTRAINT FK_archivo_modulo
-    FOREIGN KEY (modulo_code) REFERENCES dbo.cat_modulo(code);
-
-ALTER TABLE dbo.archivo
-ADD CONSTRAINT FK_archivo_creado_por
-    FOREIGN KEY (creado_por) REFERENCES dbo.usuario(id);
-
-ALTER TABLE dbo.cat_tipo_reporte
-ADD CONSTRAINT FK_tipo_reporte_modulo
-    FOREIGN KEY (modulo_code) REFERENCES dbo.cat_modulo(code);
-
-ALTER TABLE dbo.reporte_descarga
-ADD CONSTRAINT FK_reporte_tipo
-    FOREIGN KEY (tipo_reporte_code) REFERENCES dbo.cat_tipo_reporte(code);
-
-ALTER TABLE dbo.reporte_descarga
-ADD CONSTRAINT FK_reporte_formato
-    FOREIGN KEY (formato_code) REFERENCES dbo.cat_formato_reporte(code);
-
-ALTER TABLE dbo.reporte_descarga
-ADD CONSTRAINT FK_reporte_vacuno
-    FOREIGN KEY (vacuno_id) REFERENCES dbo.vacuno(id);
-
-ALTER TABLE dbo.reporte_descarga
-ADD CONSTRAINT FK_reporte_archivo
-    FOREIGN KEY (archivo_id) REFERENCES dbo.archivo(id);
-
-ALTER TABLE dbo.reporte_descarga
-ADD CONSTRAINT FK_reporte_usuario
-    FOREIGN KEY (solicitado_por) REFERENCES dbo.usuario(id);
-
-ALTER TABLE dbo.parametro_sistema
-ADD CONSTRAINT FK_parametro_modulo
-    FOREIGN KEY (modulo_code) REFERENCES dbo.cat_modulo(code);
-
-ALTER TABLE dbo.bitacora_auditoria
-ADD CONSTRAINT FK_bitacora_modulo
-    FOREIGN KEY (modulo_code) REFERENCES dbo.cat_modulo(code);
-
-ALTER TABLE dbo.bitacora_auditoria
-ADD CONSTRAINT FK_bitacora_usuario
-    FOREIGN KEY (usuario_id) REFERENCES dbo.usuario(id);
-
-ALTER TABLE dbo.responsable
-ADD CONSTRAINT FK_responsable_usuario
-    FOREIGN KEY (usuario_id) REFERENCES dbo.usuario(id);
-
-ALTER TABLE dbo.responsable
-ADD CONSTRAINT FK_responsable_tipo
-    FOREIGN KEY (tipo_responsable_code) REFERENCES dbo.cat_tipo_responsable(code);
-
-ALTER TABLE dbo.geo_provincia
-ADD CONSTRAINT FK_geo_provincia_departamento
-    FOREIGN KEY (departamento_codigo) REFERENCES dbo.geo_departamento(codigo);
-
-ALTER TABLE dbo.geo_distrito
-ADD CONSTRAINT FK_geo_distrito_provincia
-    FOREIGN KEY (provincia_codigo) REFERENCES dbo.geo_provincia(codigo);
-
-ALTER TABLE dbo.granja
-ADD CONSTRAINT FK_granja_distrito
-    FOREIGN KEY (distrito_codigo) REFERENCES dbo.geo_distrito(codigo);
-
-ALTER TABLE dbo.vacuno
-ADD CONSTRAINT FK_vacuno_tipo_adquisicion
-    FOREIGN KEY (tipo_adquisicion_code) REFERENCES dbo.cat_tipo_adquisicion(code);
-
-ALTER TABLE dbo.vacuno
-ADD CONSTRAINT FK_vacuno_raza
-    FOREIGN KEY (raza_code) REFERENCES dbo.cat_raza(code);
-
-ALTER TABLE dbo.vacuno
-ADD CONSTRAINT FK_vacuno_color
-    FOREIGN KEY (color_id) REFERENCES dbo.cat_color(id);
-
-ALTER TABLE dbo.vacuno
-ADD CONSTRAINT FK_vacuno_sexo
-    FOREIGN KEY (sexo_code) REFERENCES dbo.cat_sexo(code);
-
-ALTER TABLE dbo.vacuno
-ADD CONSTRAINT FK_vacuno_padre
-    FOREIGN KEY (padre_id) REFERENCES dbo.vacuno(id);
-
-ALTER TABLE dbo.vacuno
-ADD CONSTRAINT FK_vacuno_madre
-    FOREIGN KEY (madre_id) REFERENCES dbo.vacuno(id);
-
-ALTER TABLE dbo.vacuno
-ADD CONSTRAINT FK_vacuno_granja
-    FOREIGN KEY (granja_id) REFERENCES dbo.granja(id);
-
-ALTER TABLE dbo.vacuno
-ADD CONSTRAINT FK_vacuno_utilizacion
-    FOREIGN KEY (tipo_utilizacion_code) REFERENCES dbo.cat_tipo_utilizacion(code);
-
-ALTER TABLE dbo.vacuno
-ADD CONSTRAINT FK_vacuno_created_by
-    FOREIGN KEY (created_by) REFERENCES dbo.usuario(id);
-
-ALTER TABLE dbo.vacuno
-ADD CONSTRAINT FK_vacuno_updated_by
-    FOREIGN KEY (updated_by) REFERENCES dbo.usuario(id);
-
-ALTER TABLE dbo.vacuno
-ADD CONSTRAINT FK_vacuno_deleted_by
-    FOREIGN KEY (deleted_by) REFERENCES dbo.usuario(id);
-
-ALTER TABLE dbo.vacuno_foto
-ADD CONSTRAINT FK_vacuno_foto_vacuno
-    FOREIGN KEY (vacuno_id) REFERENCES dbo.vacuno(id);
-
-ALTER TABLE dbo.vacuno_foto
-ADD CONSTRAINT FK_vacuno_foto_archivo
-    FOREIGN KEY (archivo_id) REFERENCES dbo.archivo(id);
-
-ALTER TABLE dbo.vacuno_foto
-ADD CONSTRAINT FK_vacuno_foto_usuario
-    FOREIGN KEY (uploaded_by) REFERENCES dbo.usuario(id);
-
-ALTER TABLE dbo.vacuno_estado_historial
-ADD CONSTRAINT FK_vacuno_estado_vacuno
-    FOREIGN KEY (vacuno_id) REFERENCES dbo.vacuno(id);
-
-ALTER TABLE dbo.vacuno_estado_historial
-ADD CONSTRAINT FK_vacuno_estado_catalogo
-    FOREIGN KEY (estado_code) REFERENCES dbo.cat_estado_vacuno(code);
-
-ALTER TABLE dbo.vacuno_estado_historial
-ADD CONSTRAINT FK_vacuno_estado_usuario
-    FOREIGN KEY (created_by) REFERENCES dbo.usuario(id);
-
-ALTER TABLE dbo.incidente_vacuno
-ADD CONSTRAINT FK_incidente_vacuno
-    FOREIGN KEY (vacuno_id) REFERENCES dbo.vacuno(id);
-
-ALTER TABLE dbo.incidente_vacuno
-ADD CONSTRAINT FK_incidente_estado
-    FOREIGN KEY (estado_registro_code) REFERENCES dbo.cat_estado_registro(code);
-
-ALTER TABLE dbo.incidente_vacuno
-ADD CONSTRAINT FK_incidente_usuario
-    FOREIGN KEY (created_by) REFERENCES dbo.usuario(id);
-
-ALTER TABLE dbo.ordenio
-ADD CONSTRAINT FK_ordenio_vacuno
-    FOREIGN KEY (vacuno_id) REFERENCES dbo.vacuno(id);
-
-ALTER TABLE dbo.ordenio
-ADD CONSTRAINT FK_ordenio_encargado
-    FOREIGN KEY (encargado_usuario_id) REFERENCES dbo.usuario(id);
-
-ALTER TABLE dbo.ordenio
-ADD CONSTRAINT FK_ordenio_estado
-    FOREIGN KEY (estado_ordenio_code) REFERENCES dbo.cat_estado_ordenio(code);
-
-ALTER TABLE dbo.ordenio
-ADD CONSTRAINT FK_ordenio_created
-    FOREIGN KEY (created_by) REFERENCES dbo.usuario(id);
-
-ALTER TABLE dbo.ordenio
-ADD CONSTRAINT FK_ordenio_updated
-    FOREIGN KEY (updated_by) REFERENCES dbo.usuario(id);
-
-ALTER TABLE dbo.ordenio
-ADD CONSTRAINT FK_ordenio_deleted
-    FOREIGN KEY (deleted_by) REFERENCES dbo.usuario(id);
-
-ALTER TABLE dbo.produccion_leche_estandar
-ADD CONSTRAINT FK_produccion_estandar_vacuno
-    FOREIGN KEY (vacuno_id) REFERENCES dbo.vacuno(id);
-
-ALTER TABLE dbo.produccion_leche_estandar
-ADD CONSTRAINT FK_produccion_estandar_usuario
-    FOREIGN KEY (created_by) REFERENCES dbo.usuario(id);
-
-ALTER TABLE dbo.periodo_sequia
-ADD CONSTRAINT FK_periodo_sequia_vacuno
-    FOREIGN KEY (vacuno_id) REFERENCES dbo.vacuno(id);
-
-ALTER TABLE dbo.periodo_sequia
-ADD CONSTRAINT FK_periodo_sequia_estado
-    FOREIGN KEY (estado_sequia_code) REFERENCES dbo.cat_estado_sequia(code);
-
-ALTER TABLE dbo.periodo_sequia
-ADD CONSTRAINT FK_periodo_sequia_created
-    FOREIGN KEY (created_by) REFERENCES dbo.usuario(id);
-
-ALTER TABLE dbo.periodo_sequia
-ADD CONSTRAINT FK_periodo_sequia_updated
-    FOREIGN KEY (updated_by) REFERENCES dbo.usuario(id);
-
-ALTER TABLE dbo.triaje
-ADD CONSTRAINT FK_triaje_vacuno
-    FOREIGN KEY (vacuno_id) REFERENCES dbo.vacuno(id);
-
-ALTER TABLE dbo.triaje
-ADD CONSTRAINT FK_triaje_tipo_peso
-    FOREIGN KEY (tipo_peso_code) REFERENCES dbo.cat_tipo_peso(code);
-
-ALTER TABLE dbo.triaje
-ADD CONSTRAINT FK_triaje_estado
-    FOREIGN KEY (estado_registro_code) REFERENCES dbo.cat_estado_registro(code);
-
-ALTER TABLE dbo.triaje
-ADD CONSTRAINT FK_triaje_encargado
-    FOREIGN KEY (encargado_usuario_id) REFERENCES dbo.usuario(id);
-
-ALTER TABLE dbo.triaje
-ADD CONSTRAINT FK_triaje_created
-    FOREIGN KEY (created_by) REFERENCES dbo.usuario(id);
-
-ALTER TABLE dbo.triaje
-ADD CONSTRAINT FK_triaje_updated
-    FOREIGN KEY (updated_by) REFERENCES dbo.usuario(id);
-
-ALTER TABLE dbo.triaje
-ADD CONSTRAINT FK_triaje_deleted
-    FOREIGN KEY (deleted_by) REFERENCES dbo.usuario(id);
-
-ALTER TABLE dbo.celo_configuracion
-ADD CONSTRAINT FK_celo_config_usuario
-    FOREIGN KEY (created_by) REFERENCES dbo.usuario(id);
-
-ALTER TABLE dbo.celo_registro
-ADD CONSTRAINT FK_celo_registro_vacuno
-    FOREIGN KEY (vacuno_id) REFERENCES dbo.vacuno(id);
-
-ALTER TABLE dbo.celo_registro
-ADD CONSTRAINT FK_celo_registro_encargado
-    FOREIGN KEY (encargado_usuario_id) REFERENCES dbo.usuario(id);
-
-ALTER TABLE dbo.celo_registro
-ADD CONSTRAINT FK_celo_registro_estado
-    FOREIGN KEY (estado_registro_code) REFERENCES dbo.cat_estado_registro(code);
-
-ALTER TABLE dbo.celo_registro
-ADD CONSTRAINT FK_celo_registro_created
-    FOREIGN KEY (created_by) REFERENCES dbo.usuario(id);
-
-ALTER TABLE dbo.celo_registro
-ADD CONSTRAINT FK_celo_registro_updated
-    FOREIGN KEY (updated_by) REFERENCES dbo.usuario(id);
-
-ALTER TABLE dbo.celo_registro
-ADD CONSTRAINT FK_celo_registro_deleted
-    FOREIGN KEY (deleted_by) REFERENCES dbo.usuario(id);
-
-ALTER TABLE dbo.celo_registro_caracteristica
-ADD CONSTRAINT FK_celo_caracteristica_registro
-    FOREIGN KEY (celo_registro_id) REFERENCES dbo.celo_registro(id);
-
-ALTER TABLE dbo.celo_registro_caracteristica
-ADD CONSTRAINT FK_celo_caracteristica_catalogo
-    FOREIGN KEY (caracteristica_id) REFERENCES dbo.cat_caracteristica_celo(id);
-
-ALTER TABLE dbo.celo_registro_caracteristica_libre
-ADD CONSTRAINT FK_celo_libre_registro
-    FOREIGN KEY (celo_registro_id) REFERENCES dbo.celo_registro(id);
-
-ALTER TABLE dbo.celo_estado_vacuno
-ADD CONSTRAINT FK_celo_estado_vacuno
-    FOREIGN KEY (vacuno_id) REFERENCES dbo.vacuno(id);
-
-ALTER TABLE dbo.celo_estado_vacuno
-ADD CONSTRAINT FK_celo_estado_catalogo
-    FOREIGN KEY (estado_celo_code) REFERENCES dbo.cat_estado_celo(code);
-
-ALTER TABLE dbo.reproductor_externo
-ADD CONSTRAINT FK_reproductor_externo_sexo
-    FOREIGN KEY (sexo_code) REFERENCES dbo.cat_sexo(code);
-
-ALTER TABLE dbo.reproductor_externo
-ADD CONSTRAINT FK_reproductor_externo_usuario
-    FOREIGN KEY (created_by) REFERENCES dbo.usuario(id);
-
-ALTER TABLE dbo.fecundacion
-ADD CONSTRAINT FK_fecundacion_tipo
-    FOREIGN KEY (tipo_fecundacion_code) REFERENCES dbo.cat_tipo_fecundacion(code);
-
-ALTER TABLE dbo.fecundacion
-ADD CONSTRAINT FK_fecundacion_receptor
-    FOREIGN KEY (vacuno_receptor_id) REFERENCES dbo.vacuno(id);
-
-ALTER TABLE dbo.fecundacion
-ADD CONSTRAINT FK_fecundacion_donante_vacuno
-    FOREIGN KEY (donante_vacuno_id) REFERENCES dbo.vacuno(id);
-
-ALTER TABLE dbo.fecundacion
-ADD CONSTRAINT FK_fecundacion_donante_externo
-    FOREIGN KEY (donante_externo_id) REFERENCES dbo.reproductor_externo(id);
-
-ALTER TABLE dbo.fecundacion
-ADD CONSTRAINT FK_fecundacion_celo
-    FOREIGN KEY (celo_registro_id) REFERENCES dbo.celo_registro(id);
-
-ALTER TABLE dbo.fecundacion
-ADD CONSTRAINT FK_fecundacion_responsable
-    FOREIGN KEY (responsable_id) REFERENCES dbo.responsable(id);
-
-ALTER TABLE dbo.fecundacion
-ADD CONSTRAINT FK_fecundacion_resultado
-    FOREIGN KEY (resultado_code) REFERENCES dbo.cat_resultado_fecundacion(code);
-
-ALTER TABLE dbo.fecundacion
-ADD CONSTRAINT FK_fecundacion_created
-    FOREIGN KEY (created_by) REFERENCES dbo.usuario(id);
-
-ALTER TABLE dbo.fecundacion
-ADD CONSTRAINT FK_fecundacion_updated
-    FOREIGN KEY (updated_by) REFERENCES dbo.usuario(id);
-
-ALTER TABLE dbo.fecundacion_cria
-ADD CONSTRAINT FK_fecundacion_cria_fecundacion
-    FOREIGN KEY (fecundacion_id) REFERENCES dbo.fecundacion(id);
-
-ALTER TABLE dbo.fecundacion_cria
-ADD CONSTRAINT FK_fecundacion_cria_vacuno
-    FOREIGN KEY (vacuno_hijo_id) REFERENCES dbo.vacuno(id);
-
-ALTER TABLE dbo.fecundacion_cria
-ADD CONSTRAINT FK_fecundacion_cria_estado
-    FOREIGN KEY (estado_trazabilidad_code) REFERENCES dbo.cat_estado_trazabilidad(code);
-
-ALTER TABLE dbo.fecundacion_cria
-ADD CONSTRAINT FK_fecundacion_cria_created
-    FOREIGN KEY (created_by) REFERENCES dbo.usuario(id);
-
-ALTER TABLE dbo.fecundacion_cria
-ADD CONSTRAINT FK_fecundacion_cria_updated
-    FOREIGN KEY (updated_by) REFERENCES dbo.usuario(id);
-
-ALTER TABLE dbo.vacuno_estado_fecundacion_historial
-ADD CONSTRAINT FK_vacuno_estado_fec_vacuno
-    FOREIGN KEY (vacuno_id) REFERENCES dbo.vacuno(id);
-
-ALTER TABLE dbo.vacuno_estado_fecundacion_historial
-ADD CONSTRAINT FK_vacuno_estado_fec_estado
-    FOREIGN KEY (estado_fecundacion_code)
-    REFERENCES dbo.cat_estado_fecundacion_vacuno(code);
-
-ALTER TABLE dbo.vacuno_estado_fecundacion_historial
-ADD CONSTRAINT FK_vacuno_estado_fec_fecundacion
-    FOREIGN KEY (fecundacion_id) REFERENCES dbo.fecundacion(id);
-
-ALTER TABLE dbo.vacuno_estado_fecundacion_historial
-ADD CONSTRAINT FK_vacuno_estado_fec_created
-    FOREIGN KEY (created_by) REFERENCES dbo.usuario(id);
-
-ALTER TABLE dbo.vacuno_estado_fecundacion_historial
-ADD CONSTRAINT FK_vacuno_estado_fec_deleted
-    FOREIGN KEY (deleted_by) REFERENCES dbo.usuario(id);
+-- -----------------------------------------------------------------------------
+-- cat_color
+-- -----------------------------------------------------------------------------
+CREATE TABLE [cat_color] (
+    [code]   VARCHAR(30)     PRIMARY KEY,
+    [nombre] VARCHAR(30)     NOT NULL,
+    [activo] BIT             NOT NULL DEFAULT 1,
+    CONSTRAINT [uq_cat_color_nombre] UNIQUE ([nombre])
+);
 GO
 
-/*
-===============================================================================
-10. DATOS INICIALES DE CATÁLOGOS
-===============================================================================
 
-Estos valores están documentados como "valores sugeridos" en el diagrama.
-Puedes conservarlos o modificar este bloque según las necesidades reales
-de tu aplicación.
-===============================================================================
-*/
-
-INSERT INTO dbo.cat_modulo(code, nombre, descripcion)
-VALUES
-('VACUNOS', 'Vacunos', 'Gestión de vacunos'),
-('PRODUCCION_LECHE', 'Producción de leche', 'Producción y ordeños'),
-('SANIDAD_TRIAJE', 'Sanidad / Triaje', 'Control sanitario y peso'),
-('REPRODUCCION_CELO', 'Reproducción / Celo', 'Gestión de celos'),
-('REPRODUCCION_FECUNDACION', 'Reproducción / Fecundación', 'Gestión de fecundaciones'),
-('REPORTES', 'Reportes', 'Generación de reportes');
+-- -----------------------------------------------------------------------------
+-- cat_tipo_adquisicion
+-- -----------------------------------------------------------------------------
+CREATE TABLE [cat_tipo_adquisicion] (
+    [code]        VARCHAR(30)     PRIMARY KEY,
+    [nombre]      VARCHAR(50)     NOT NULL,
+    [descripcion] VARCHAR(150),
+    [activo]      BIT             NOT NULL DEFAULT 1,
+    CONSTRAINT [uq_cat_tipo_adquisicion_nombre] UNIQUE ([nombre])
+);
 GO
 
-INSERT INTO dbo.cat_estado_registro(code, nombre)
-VALUES
-('ACTIVO', 'Activo'),
-('ELIMINADO_LOGICO', 'Eliminado lógico'),
-('ANULADO', 'Anulado'),
-('DESHABILITADO', 'Deshabilitado');
+
+-- -----------------------------------------------------------------------------
+-- cat_tipo_utilizacion
+-- -----------------------------------------------------------------------------
+CREATE TABLE [cat_tipo_utilizacion] (
+    [code]        VARCHAR(30)     PRIMARY KEY,
+    [nombre]      VARCHAR(50)     NOT NULL,
+    [descripcion] VARCHAR(150),
+    [activo]      BIT             NOT NULL DEFAULT 1,
+    CONSTRAINT [uq_cat_tipo_utilizacion_nombre] UNIQUE ([nombre])
+);
 GO
 
-INSERT INTO dbo.cat_formato_reporte(code, nombre)
-VALUES
-('PDF', 'PDF'),
-('XLSX', 'XLSX');
+
+-- -----------------------------------------------------------------------------
+-- cat_estado_vacuno
+-- -----------------------------------------------------------------------------
+CREATE TABLE [cat_estado_vacuno] (
+    [code]        VARCHAR(15)     PRIMARY KEY,
+    [nombre]      VARCHAR(30)     NOT NULL,
+    [descripcion] VARCHAR(150),
+    CONSTRAINT [uq_cat_estado_vacuno_nombre] UNIQUE ([nombre])
+);
 GO
 
-INSERT INTO dbo.cat_sexo(code, nombre)
-VALUES
-('HEMBRA', 'Hembra'),
-('MACHO', 'Macho');
+
+-- -----------------------------------------------------------------------------
+-- Geografía
+-- -----------------------------------------------------------------------------
+CREATE TABLE [geo_departamento] (
+    [codigo] VARCHAR(2)      PRIMARY KEY,
+    [nombre] VARCHAR(60)     NOT NULL,
+    CONSTRAINT [uq_geo_departamento_nombre] UNIQUE ([nombre])
+);
 GO
 
-INSERT INTO dbo.cat_estado_vacuno(code, nombre)
-VALUES
-('VIVO', 'Vivo'),
-('MUERTO', 'Muerto'),
-('VENDIDO', 'Vendido'),
-('TRASLADADO', 'Trasladado');
+CREATE TABLE [geo_provincia] (
+    [codigo]              VARCHAR(4)      PRIMARY KEY,
+    [departamento_codigo] VARCHAR(2)      NOT NULL,
+    [nombre]              VARCHAR(60)     NOT NULL,
+    CONSTRAINT [fk_provincia_departamento] FOREIGN KEY ([departamento_codigo])
+        REFERENCES [geo_departamento] ([codigo]),
+    CONSTRAINT [uq_geo_provincia_dep_nombre] UNIQUE ([departamento_codigo], [nombre])
+);
 GO
 
-INSERT INTO dbo.cat_tipo_adquisicion(code, nombre)
-VALUES
-('COMPRA', 'Compra'),
-('MONTA', 'Monta'),
-('INSEMINACION', 'Inseminación'),
-('NACIMIENTO_GRANJA', 'Nacimiento en granja'),
-('DONACION', 'Donación'),
-('TRANSFERENCIA_EMBRION', 'Transferencia de embrión');
+CREATE TABLE [geo_distrito] (
+    [codigo]           VARCHAR(6)      PRIMARY KEY,
+    [provincia_codigo] VARCHAR(4)      NOT NULL,
+    [nombre]           VARCHAR(60)     NOT NULL,
+    CONSTRAINT [fk_distrito_provincia] FOREIGN KEY ([provincia_codigo])
+        REFERENCES [geo_provincia] ([codigo]),
+    CONSTRAINT [uq_geo_distrito_prov_nombre] UNIQUE ([provincia_codigo], [nombre])
+);
 GO
 
-INSERT INTO dbo.cat_tipo_utilizacion(code, nombre)
-VALUES
-('LECHE', 'Leche'),
-('CARNE', 'Carne'),
-('REPRODUCCION', 'Reproducción'),
-('DOBLE_PROPOSITO', 'Doble propósito'),
-('OTRO', 'Otro');
+
+-- -----------------------------------------------------------------------------
+-- granja
+-- -----------------------------------------------------------------------------
+CREATE TABLE [granja] (
+    [id]              BIGINT          IDENTITY(1,1) PRIMARY KEY,
+    [nombre]          VARCHAR(100)    NOT NULL,
+    [distrito_codigo] VARCHAR(6)      NOT NULL,
+    [activo]          BIT             NOT NULL DEFAULT 1,
+    [created_at]      DATETIME2       NOT NULL DEFAULT SYSDATETIME(),
+    [updated_at]      DATETIME2       NOT NULL DEFAULT SYSDATETIME(),
+    CONSTRAINT [fk_granja_distrito]       FOREIGN KEY ([distrito_codigo]) REFERENCES [geo_distrito] ([codigo]),
+    CONSTRAINT [uq_granja_nombre_distrito] UNIQUE ([nombre], [distrito_codigo])
+);
 GO
 
-INSERT INTO dbo.cat_tipo_responsable(code, nombre)
-VALUES
-('ENCARGADO', 'Encargado'),
-('VETERINARIO', 'Veterinario'),
-('TECNICO', 'Técnico'),
-('ADMINISTRADOR', 'Administrador'),
-('EXTERNO', 'Externo');
+-- CID: Disponibilidad
+CREATE INDEX [idx_granja_distrito] ON [granja] ([distrito_codigo]);
 GO
 
-INSERT INTO dbo.cat_estado_ordenio(code, nombre)
-VALUES
-('ACTIVO', 'Activo'),
-('ELIMINADO_LOGICO', 'Eliminado lógico'),
-('ANULADO', 'Anulado');
+
+-- =============================================================================
+-- BLOQUE 4: VACUNO — ENTIDAD PRINCIPAL Y SUBENTIDADES (3FN)
+-- =============================================================================
+
+-- -----------------------------------------------------------------------------
+-- vacuno
+-- 3FN-01: precio_compra y fecha_adquisicion movidos a vacuno_adquisicion.
+-- 3FN-02: tipo_utilizacion_code movido a vacuno_utilizacion_historial.
+-- CID: Confidencialidad — Requiere rol: rol_encargado, rol_veterinario, rol_admin.
+-- -----------------------------------------------------------------------------
+CREATE TABLE [vacuno] (
+    [id]                    BIGINT          IDENTITY(1,1) PRIMARY KEY,
+    [codigo]                VARCHAR(15)     NOT NULL,
+    [nombre]                VARCHAR(100)    NOT NULL,
+    [fecha_nacimiento]      DATE            NOT NULL,
+    [tipo_adquisicion_code] VARCHAR(30)     NOT NULL,
+    [raza_code]             VARCHAR(30)     NOT NULL,
+    [color_code]            VARCHAR(30)     NOT NULL,
+    [sexo_code]             VARCHAR(10)     NOT NULL,
+    [padre_id]              BIGINT,
+    [madre_id]              BIGINT,
+    [granja_id]             BIGINT          NOT NULL,
+    [observaciones]         VARCHAR(150),
+    [fecha_registro]        DATE            NOT NULL,
+    [created_by]            BIGINT,
+    [updated_by]            BIGINT,
+    [deleted_by]            BIGINT,
+    [created_at]            DATETIME2       NOT NULL DEFAULT SYSDATETIME(),
+    [updated_at]            DATETIME2       NOT NULL DEFAULT SYSDATETIME(),
+    [deleted_at]            DATETIME2,
+    [motivo_eliminacion]    VARCHAR(250),
+    CONSTRAINT [uq_vacuno_codigo]        UNIQUE ([codigo]),
+    CONSTRAINT [fk_vacuno_adquisicion]   FOREIGN KEY ([tipo_adquisicion_code]) REFERENCES [cat_tipo_adquisicion] ([code]),
+    CONSTRAINT [fk_vacuno_raza]          FOREIGN KEY ([raza_code])             REFERENCES [cat_raza] ([code]),
+    CONSTRAINT [fk_vacuno_color]         FOREIGN KEY ([color_code])            REFERENCES [cat_color] ([code]),
+    CONSTRAINT [fk_vacuno_sexo]          FOREIGN KEY ([sexo_code])             REFERENCES [cat_sexo] ([code]),
+    CONSTRAINT [fk_vacuno_padre]         FOREIGN KEY ([padre_id])              REFERENCES [vacuno] ([id]),
+    CONSTRAINT [fk_vacuno_madre]         FOREIGN KEY ([madre_id])              REFERENCES [vacuno] ([id]),
+    CONSTRAINT [fk_vacuno_granja]        FOREIGN KEY ([granja_id])             REFERENCES [granja] ([id]),
+    CONSTRAINT [fk_vacuno_created_by]    FOREIGN KEY ([created_by])            REFERENCES [usuario] ([id]),
+    CONSTRAINT [fk_vacuno_updated_by]    FOREIGN KEY ([updated_by])            REFERENCES [usuario] ([id]),
+    CONSTRAINT [fk_vacuno_deleted_by]    FOREIGN KEY ([deleted_by])            REFERENCES [usuario] ([id]),
+    -- CID: Integridad — fecha de nacimiento no puede ser futura
+    CONSTRAINT [ck_vacuno_fecha_nacimiento] CHECK ([fecha_nacimiento] <= CAST(GETDATE() AS DATE)),
+    -- CID: Integridad — auto-referencias genealógicas
+    CONSTRAINT [ck_vacuno_padre_no_self]   CHECK ([padre_id] <> [id]),
+    CONSTRAINT [ck_vacuno_madre_no_self]   CHECK ([madre_id] <> [id])
+);
 GO
 
-INSERT INTO dbo.cat_estado_sequia(code, nombre)
-VALUES
-('NO_SEQUIA', 'No sequía'),
-('POR_ENTRAR', 'Por entrar'),
-('EN_SEQUIA', 'En sequía'),
-('FINALIZADA', 'Finalizada'),
-('CANCELADA', 'Cancelada');
+-- CID: Disponibilidad
+CREATE INDEX [idx_vacuno_nombre]           ON [vacuno] ([nombre]);
+CREATE INDEX [idx_vacuno_fecha_nacimiento] ON [vacuno] ([fecha_nacimiento]);
+CREATE INDEX [idx_vacuno_raza]             ON [vacuno] ([raza_code]);
+CREATE INDEX [idx_vacuno_sexo]             ON [vacuno] ([sexo_code]);
+CREATE INDEX [idx_vacuno_granja]           ON [vacuno] ([granja_id]);
+CREATE INDEX [idx_vacuno_padre]            ON [vacuno] ([padre_id]);
+CREATE INDEX [idx_vacuno_madre]            ON [vacuno] ([madre_id]);
+CREATE INDEX [idx_vacuno_fecha_registro]   ON [vacuno] ([fecha_registro]);
+CREATE INDEX [idx_vacuno_deleted_at]       ON [vacuno] ([deleted_at]);
 GO
 
-INSERT INTO dbo.cat_tipo_peso(code, nombre)
-VALUES
-('RUTINARIO', 'Rutinario'),
-('NACIMIENTO', 'Nacimiento'),
-('CONTROL', 'Control'),
-('PRE_PARTO', 'Pre parto'),
-('POST_PARTO', 'Post parto'),
-('RECUPERACION', 'Recuperación'),
-('OTRO', 'Otro');
+
+-- -----------------------------------------------------------------------------
+-- vacuno_adquisicion  [NUEVA — 3FN-01]
+-- CID: Confidencialidad — precio es dato económico sensible. Requiere rol: rol_admin.
+-- -----------------------------------------------------------------------------
+CREATE TABLE [vacuno_adquisicion] (
+    [vacuno_id]             BIGINT          PRIMARY KEY,
+    [tipo_adquisicion_code] VARCHAR(30)     NOT NULL,
+    [precio_compra]         NUMERIC(12, 2),
+    [fecha_adquisicion]     DATE            NOT NULL,
+    [proveedor]             VARCHAR(150),
+    [observaciones]         VARCHAR(250),
+    [created_at]            DATETIME2       NOT NULL DEFAULT SYSDATETIME(),
+    CONSTRAINT [fk_vacuno_adquisicion_vacuno] FOREIGN KEY ([vacuno_id])
+        REFERENCES [vacuno] ([id]),
+    CONSTRAINT [fk_vacuno_adquisicion_tipo] FOREIGN KEY ([tipo_adquisicion_code])
+        REFERENCES [cat_tipo_adquisicion] ([code]),
+    -- CID: Integridad — precio debe ser positivo si se registra
+    CONSTRAINT [ck_vacuno_adquisicion_precio] CHECK (
+        [precio_compra] IS NULL OR [precio_compra] > 0
+    ),
+    -- CID: Integridad — fecha de adquisición no futura
+    CONSTRAINT [ck_vacuno_adquisicion_fecha] CHECK ([fecha_adquisicion] <= CAST(GETDATE() AS DATE))
+);
 GO
 
-INSERT INTO dbo.cat_estado_celo(code, nombre)
-VALUES
-('PROXIMO', 'Próximo'),
-('EN_CELO', 'En celo'),
-('PASO', 'Pasó'),
-('SIN_DATOS', 'Sin datos');
+-- CID: Disponibilidad
+CREATE INDEX [idx_vacuno_adquisicion_tipo]  ON [vacuno_adquisicion] ([tipo_adquisicion_code]);
+CREATE INDEX [idx_vacuno_adquisicion_fecha] ON [vacuno_adquisicion] ([fecha_adquisicion]);
 GO
 
-INSERT INTO dbo.cat_tipo_fecundacion(code, nombre)
-VALUES
-('MONTA_NATURAL', 'Monta natural'),
-('INSEMINACION_ARTIFICIAL', 'Inseminación artificial'),
-('TRANSFERENCIA_EMBRIONES', 'Transferencia de embriones');
+
+-- -----------------------------------------------------------------------------
+-- vacuno_utilizacion_historial  [NUEVA — 3FN-02]
+-- -----------------------------------------------------------------------------
+CREATE TABLE [vacuno_utilizacion_historial] (
+    [id]                    BIGINT          IDENTITY(1,1) PRIMARY KEY,
+    [vacuno_id]             BIGINT          NOT NULL,
+    [tipo_utilizacion_code] VARCHAR(30)     NOT NULL,
+    [motivo]                VARCHAR(150),
+    [created_by]            BIGINT,
+    [created_at]            DATETIME2       NOT NULL DEFAULT SYSDATETIME(),
+    CONSTRAINT [fk_vuh_vacuno]      FOREIGN KEY ([vacuno_id])             REFERENCES [vacuno] ([id]),
+    CONSTRAINT [fk_vuh_utilizacion] FOREIGN KEY ([tipo_utilizacion_code]) REFERENCES [cat_tipo_utilizacion] ([code]),
+    CONSTRAINT [fk_vuh_created_by]  FOREIGN KEY ([created_by])            REFERENCES [usuario] ([id])
+);
 GO
 
-INSERT INTO dbo.cat_resultado_fecundacion(code, nombre)
-VALUES
-('PENDIENTE', 'Pendiente'),
-('EXITOSA', 'Exitosa'),
-('FALLIDA', 'Fallida');
+-- CID: Disponibilidad
+CREATE INDEX [idx_vuh_vacuno]     ON [vacuno_utilizacion_historial] ([vacuno_id]);
+CREATE INDEX [idx_vuh_tipo]       ON [vacuno_utilizacion_historial] ([tipo_utilizacion_code]);
+CREATE INDEX [idx_vuh_created_at] ON [vacuno_utilizacion_historial] ([created_at]);
 GO
 
-INSERT INTO dbo.cat_estado_fecundacion_vacuno(code, nombre)
-VALUES
-('NO_FECUNDADO', 'No fecundado'),
-('EN_PROCESO', 'En proceso'),
-('FECUNDADO', 'Fecundado'),
-('EN_GESTACION', 'En gestación'),
-('SIN_ESTADO', 'Sin estado');
+
+-- -----------------------------------------------------------------------------
+-- vacuno_foto
+-- Es_principal garantizado con UNIQUE filtrado (solo 1 = TRUE por vacuno).
+-- -----------------------------------------------------------------------------
+CREATE TABLE [vacuno_foto] (
+    [id]           BIGINT          IDENTITY(1,1) PRIMARY KEY,
+    [vacuno_id]    BIGINT          NOT NULL,
+    [archivo_id]   BIGINT          NOT NULL,
+    [es_principal] BIT             NOT NULL DEFAULT 0,
+    [uploaded_by]  BIGINT,
+    [created_at]   DATETIME2       NOT NULL DEFAULT SYSDATETIME(),
+    CONSTRAINT [fk_vacuno_foto_vacuno]   FOREIGN KEY ([vacuno_id])   REFERENCES [vacuno] ([id]),
+    CONSTRAINT [fk_vacuno_foto_archivo]  FOREIGN KEY ([archivo_id])  REFERENCES [archivo] ([id]),
+    CONSTRAINT [fk_vacuno_foto_uploaded] FOREIGN KEY ([uploaded_by]) REFERENCES [usuario] ([id])
+);
 GO
 
-INSERT INTO dbo.cat_estado_trazabilidad(code, nombre)
-VALUES
-('VALIDA', 'Válida'),
-('ANULADA', 'Anulada'),
-('PENDIENTE', 'Pendiente');
+-- CID: Disponibilidad
+CREATE INDEX [idx_vacuno_foto_vacuno]  ON [vacuno_foto] ([vacuno_id]);
+CREATE INDEX [idx_vacuno_foto_archivo] ON [vacuno_foto] ([archivo_id]);
 GO
+
+-- Garantiza una sola foto principal por vacuno (Índice Filtrado — SQL Server)
+CREATE UNIQUE NONCLUSTERED INDEX [uq_vacuno_foto_principal]
+    ON [vacuno_foto] ([vacuno_id])
+    WHERE [es_principal] = 1;
+GO
+
+
+-- -----------------------------------------------------------------------------
+-- vacuno_estado_historial
+-- Campo vigente eliminado: el estado vigente = MAX(created_at) por vacuno_id (3FN-08).
+-- -----------------------------------------------------------------------------
+CREATE TABLE [vacuno_estado_historial] (
+    [id]          BIGINT          IDENTITY(1,1) PRIMARY KEY,
+    [vacuno_id]   BIGINT          NOT NULL,
+    [estado_code] VARCHAR(15)     NOT NULL,
+    [fecha_estado] DATE           NOT NULL,
+    [motivo]      VARCHAR(150),
+    [created_by]  BIGINT,
+    [created_at]  DATETIME2       NOT NULL DEFAULT SYSDATETIME(),
+    CONSTRAINT [fk_veh_vacuno]  FOREIGN KEY ([vacuno_id])   REFERENCES [vacuno] ([id]),
+    CONSTRAINT [fk_veh_estado]  FOREIGN KEY ([estado_code]) REFERENCES [cat_estado_vacuno] ([code]),
+    CONSTRAINT [fk_veh_created] FOREIGN KEY ([created_by])  REFERENCES [usuario] ([id])
+);
+GO
+
+-- CID: Disponibilidad
+CREATE INDEX [idx_veh_vacuno]     ON [vacuno_estado_historial] ([vacuno_id]);
+CREATE INDEX [idx_veh_estado]     ON [vacuno_estado_historial] ([estado_code]);
+CREATE INDEX [idx_veh_fecha]      ON [vacuno_estado_historial] ([fecha_estado]);
+CREATE INDEX [idx_veh_created_at] ON [vacuno_estado_historial] ([created_at]);
+GO
+
+
+-- -----------------------------------------------------------------------------
+-- incidente_vacuno
+-- -----------------------------------------------------------------------------
+CREATE TABLE [incidente_vacuno] (
+    [id]                   BIGINT          IDENTITY(1,1) PRIMARY KEY,
+    [vacuno_id]            BIGINT          NOT NULL,
+    [fecha_incidente]      DATE            NOT NULL,
+    [descripcion]          VARCHAR(150)    NOT NULL,
+    [estado_registro_code] VARCHAR(30)     NOT NULL DEFAULT 'ACTIVO',
+    [created_by]           BIGINT,
+    [created_at]           DATETIME2       NOT NULL DEFAULT SYSDATETIME(),
+    CONSTRAINT [fk_incidente_vacuno]  FOREIGN KEY ([vacuno_id])            REFERENCES [vacuno] ([id]),
+    CONSTRAINT [fk_incidente_estado]  FOREIGN KEY ([estado_registro_code]) REFERENCES [cat_estado_registro] ([code]),
+    CONSTRAINT [fk_incidente_created] FOREIGN KEY ([created_by])           REFERENCES [usuario] ([id]),
+    -- CID: Integridad — fecha de incidente no futura
+    CONSTRAINT [ck_incidente_fecha] CHECK ([fecha_incidente] <= CAST(GETDATE() AS DATE))
+);
+GO
+
+-- CID: Disponibilidad
+CREATE INDEX [idx_incidente_vacuno] ON [incidente_vacuno] ([vacuno_id]);
+CREATE INDEX [idx_incidente_fecha]  ON [incidente_vacuno] ([fecha_incidente]);
+CREATE INDEX [idx_incidente_estado] ON [incidente_vacuno] ([estado_registro_code]);
+GO
+
+
+-- =============================================================================
+-- BLOQUE 5: PRODUCCIÓN DE LECHE
+-- =============================================================================
+
+-- -----------------------------------------------------------------------------
+-- cat_estado_ordenio
+-- -----------------------------------------------------------------------------
+CREATE TABLE [cat_estado_ordenio] (
+    [code]        VARCHAR(30)     PRIMARY KEY,
+    [nombre]      VARCHAR(50)     NOT NULL,
+    [descripcion] VARCHAR(150),
+    CONSTRAINT [uq_cat_estado_ordenio_nombre] UNIQUE ([nombre])
+);
+GO
+
+
+-- -----------------------------------------------------------------------------
+-- ordenio
+-- CID: Confidencialidad — datos de producción. Requiere rol: rol_encargado, rol_admin.
+-- -----------------------------------------------------------------------------
+CREATE TABLE [ordenio] (
+    [id]                   BIGINT          IDENTITY(1,1) PRIMARY KEY,
+    [codigo]               VARCHAR(15)     NOT NULL,
+    [fecha_hora]           DATETIME2       NOT NULL,
+    [vacuno_id]            BIGINT          NOT NULL,
+    [encargado_usuario_id] BIGINT          NOT NULL,
+    [litros]               NUMERIC(8, 3)   NOT NULL,
+    [observaciones]        VARCHAR(150),
+    [estado_ordenio_code]  VARCHAR(30)     NOT NULL DEFAULT 'ACTIVO',
+    [created_by]           BIGINT,
+    [updated_by]           BIGINT,
+    [deleted_by]           BIGINT,
+    [created_at]           DATETIME2       NOT NULL DEFAULT SYSDATETIME(),
+    [updated_at]           DATETIME2       NOT NULL DEFAULT SYSDATETIME(),
+    [deleted_at]           DATETIME2,
+    [motivo_eliminacion]   VARCHAR(250),
+    CONSTRAINT [uq_ordenio_codigo]       UNIQUE ([codigo]),
+    CONSTRAINT [uq_ordenio_vacuno_fecha] UNIQUE ([vacuno_id], [fecha_hora]),
+    CONSTRAINT [fk_ordenio_vacuno]       FOREIGN KEY ([vacuno_id])            REFERENCES [vacuno] ([id]),
+    CONSTRAINT [fk_ordenio_encargado]    FOREIGN KEY ([encargado_usuario_id]) REFERENCES [usuario] ([id]),
+    CONSTRAINT [fk_ordenio_estado]       FOREIGN KEY ([estado_ordenio_code])  REFERENCES [cat_estado_ordenio] ([code]),
+    CONSTRAINT [fk_ordenio_created_by]   FOREIGN KEY ([created_by])           REFERENCES [usuario] ([id]),
+    CONSTRAINT [fk_ordenio_updated_by]   FOREIGN KEY ([updated_by])           REFERENCES [usuario] ([id]),
+    CONSTRAINT [fk_ordenio_deleted_by]   FOREIGN KEY ([deleted_by])           REFERENCES [usuario] ([id]),
+    -- CID: Integridad — litros deben ser positivos
+    CONSTRAINT [ck_ordenio_litros] CHECK ([litros] > 0),
+    -- CID: Integridad — fecha no futura
+    CONSTRAINT [ck_ordenio_fecha]  CHECK ([fecha_hora] <= SYSDATETIME())
+);
+GO
+
+-- CID: Disponibilidad
+CREATE INDEX [idx_ordenio_fecha_hora] ON [ordenio] ([fecha_hora]);
+CREATE INDEX [idx_ordenio_vacuno]     ON [ordenio] ([vacuno_id]);
+CREATE INDEX [idx_ordenio_encargado]  ON [ordenio] ([encargado_usuario_id]);
+CREATE INDEX [idx_ordenio_estado]     ON [ordenio] ([estado_ordenio_code]);
+CREATE INDEX [idx_ordenio_deleted_at] ON [ordenio] ([deleted_at]);
+GO
+
+
+-- -----------------------------------------------------------------------------
+-- produccion_leche_estandar
+-- Campo activo eliminado: el estándar vigente = fecha_fin IS NULL o MAX(fecha_inicio) (3FN-08).
+-- -----------------------------------------------------------------------------
+CREATE TABLE [produccion_leche_estandar] (
+    [id]                   BIGINT          IDENTITY(1,1) PRIMARY KEY,
+    [vacuno_id]            BIGINT,
+    [fecha_inicio]         DATE            NOT NULL,
+    [fecha_fin]            DATE,
+    [litros_esperados_dia] NUMERIC(8, 3)   NOT NULL,
+    [descripcion]          VARCHAR(150),
+    [created_by]           BIGINT,
+    [created_at]           DATETIME2       NOT NULL DEFAULT SYSDATETIME(),
+    [updated_at]           DATETIME2       NOT NULL DEFAULT SYSDATETIME(),
+    CONSTRAINT [fk_ple_vacuno]     FOREIGN KEY ([vacuno_id])  REFERENCES [vacuno] ([id]),
+    CONSTRAINT [fk_ple_created_by] FOREIGN KEY ([created_by]) REFERENCES [usuario] ([id]),
+    -- CID: Integridad — litros esperados positivos
+    CONSTRAINT [ck_ple_litros] CHECK ([litros_esperados_dia] > 0),
+    -- CID: Integridad — rango de fechas coherente
+    CONSTRAINT [ck_ple_fechas] CHECK ([fecha_fin] IS NULL OR [fecha_inicio] <= [fecha_fin])
+);
+GO
+
+-- CID: Disponibilidad
+CREATE INDEX [idx_ple_vacuno]    ON [produccion_leche_estandar] ([vacuno_id]);
+CREATE INDEX [idx_ple_fecha_ini] ON [produccion_leche_estandar] ([fecha_inicio]);
+CREATE INDEX [idx_ple_fecha_fin] ON [produccion_leche_estandar] ([fecha_fin]);
+GO
+
+
+-- -----------------------------------------------------------------------------
+-- cat_estado_sequia
+-- -----------------------------------------------------------------------------
+CREATE TABLE [cat_estado_sequia] (
+    [code]        VARCHAR(30)     PRIMARY KEY,
+    [nombre]      VARCHAR(50)     NOT NULL,
+    [descripcion] VARCHAR(150),
+    CONSTRAINT [uq_cat_estado_sequia_nombre] UNIQUE ([nombre])
+);
+GO
+
+
+-- -----------------------------------------------------------------------------
+-- periodo_sequia
+-- -----------------------------------------------------------------------------
+CREATE TABLE [periodo_sequia] (
+    [id]                 BIGINT          IDENTITY(1,1) PRIMARY KEY,
+    [vacuno_id]          BIGINT          NOT NULL,
+    [fecha_inicio]       DATE            NOT NULL,
+    [fecha_fin_estimada] DATE,
+    [fecha_fin_real]     DATE,
+    [estado_sequia_code] VARCHAR(30)     NOT NULL,
+    [motivo]             VARCHAR(150),
+    [observaciones]      VARCHAR(150),
+    [created_by]         BIGINT,
+    [updated_by]         BIGINT,
+    [created_at]         DATETIME2       NOT NULL DEFAULT SYSDATETIME(),
+    [updated_at]         DATETIME2       NOT NULL DEFAULT SYSDATETIME(),
+    CONSTRAINT [fk_sequia_vacuno]     FOREIGN KEY ([vacuno_id])          REFERENCES [vacuno] ([id]),
+    CONSTRAINT [fk_sequia_estado]     FOREIGN KEY ([estado_sequia_code]) REFERENCES [cat_estado_sequia] ([code]),
+    CONSTRAINT [fk_sequia_created_by] FOREIGN KEY ([created_by])         REFERENCES [usuario] ([id]),
+    CONSTRAINT [fk_sequia_updated_by] FOREIGN KEY ([updated_by])         REFERENCES [usuario] ([id]),
+    -- CID: Integridad — coherencia de fechas
+    CONSTRAINT [ck_sequia_fechas] CHECK (
+        ([fecha_fin_estimada] IS NULL OR [fecha_inicio] <= [fecha_fin_estimada]) AND
+        ([fecha_fin_real]     IS NULL OR [fecha_inicio] <= [fecha_fin_real])
+    )
+);
+GO
+
+-- CID: Disponibilidad
+CREATE INDEX [idx_sequia_vacuno]      ON [periodo_sequia] ([vacuno_id]);
+CREATE INDEX [idx_sequia_fecha_ini]   ON [periodo_sequia] ([fecha_inicio]);
+CREATE INDEX [idx_sequia_fecha_fin_e] ON [periodo_sequia] ([fecha_fin_estimada]);
+CREATE INDEX [idx_sequia_fecha_fin_r] ON [periodo_sequia] ([fecha_fin_real]);
+CREATE INDEX [idx_sequia_estado]      ON [periodo_sequia] ([estado_sequia_code]);
+GO
+
+
+-- =============================================================================
+-- BLOQUE 6: TRIAJE
+-- =============================================================================
+
+-- -----------------------------------------------------------------------------
+-- cat_tipo_peso
+-- -----------------------------------------------------------------------------
+CREATE TABLE [cat_tipo_peso] (
+    [code]        VARCHAR(30)     PRIMARY KEY,
+    [nombre]      VARCHAR(50)     NOT NULL,
+    [descripcion] VARCHAR(150),
+    [activo]      BIT             NOT NULL DEFAULT 1,
+    CONSTRAINT [uq_cat_tipo_peso_nombre] UNIQUE ([nombre])
+);
+GO
+
+
+-- -----------------------------------------------------------------------------
+-- triaje
+-- CID: Confidencialidad — datos médicos. Requiere rol: rol_veterinario, rol_encargado.
+-- -----------------------------------------------------------------------------
+CREATE TABLE [triaje] (
+    [id]                   BIGINT          IDENTITY(1,1) PRIMARY KEY,
+    [codigo]               VARCHAR(15)     NOT NULL,
+    [fecha_hora]           DATETIME2       NOT NULL,
+    [vacuno_id]            BIGINT          NOT NULL,
+    [tipo_peso_code]       VARCHAR(30)     NOT NULL,
+    [peso_kg]              NUMERIC(8, 2)   NOT NULL,
+    [observaciones]        VARCHAR(150),
+    [estado_registro_code] VARCHAR(30)     NOT NULL DEFAULT 'ACTIVO',
+    [encargado_usuario_id] BIGINT,
+    [created_by]           BIGINT,
+    [updated_by]           BIGINT,
+    [deleted_by]           BIGINT,
+    [created_at]           DATETIME2       NOT NULL DEFAULT SYSDATETIME(),
+    [updated_at]           DATETIME2       NOT NULL DEFAULT SYSDATETIME(),
+    [deleted_at]           DATETIME2,
+    [motivo_eliminacion]   VARCHAR(250),
+    CONSTRAINT [uq_triaje_codigo]            UNIQUE ([codigo]),
+    CONSTRAINT [uq_triaje_vacuno_fecha_tipo] UNIQUE ([vacuno_id], [fecha_hora], [tipo_peso_code]),
+    CONSTRAINT [fk_triaje_vacuno]            FOREIGN KEY ([vacuno_id])            REFERENCES [vacuno] ([id]),
+    CONSTRAINT [fk_triaje_tipo_peso]         FOREIGN KEY ([tipo_peso_code])       REFERENCES [cat_tipo_peso] ([code]),
+    CONSTRAINT [fk_triaje_estado]            FOREIGN KEY ([estado_registro_code]) REFERENCES [cat_estado_registro] ([code]),
+    CONSTRAINT [fk_triaje_encargado]         FOREIGN KEY ([encargado_usuario_id]) REFERENCES [usuario] ([id]),
+    CONSTRAINT [fk_triaje_created_by]        FOREIGN KEY ([created_by])           REFERENCES [usuario] ([id]),
+    CONSTRAINT [fk_triaje_updated_by]        FOREIGN KEY ([updated_by])           REFERENCES [usuario] ([id]),
+    CONSTRAINT [fk_triaje_deleted_by]        FOREIGN KEY ([deleted_by])           REFERENCES [usuario] ([id]),
+    -- CID: Integridad — peso debe ser positivo
+    CONSTRAINT [ck_triaje_peso]  CHECK ([peso_kg] > 0),
+    -- CID: Integridad — fecha no futura
+    CONSTRAINT [ck_triaje_fecha] CHECK ([fecha_hora] <= SYSDATETIME())
+);
+GO
+
+-- CID: Disponibilidad
+CREATE INDEX [idx_triaje_fecha_hora] ON [triaje] ([fecha_hora]);
+CREATE INDEX [idx_triaje_vacuno]     ON [triaje] ([vacuno_id]);
+CREATE INDEX [idx_triaje_tipo_peso]  ON [triaje] ([tipo_peso_code]);
+CREATE INDEX [idx_triaje_estado]     ON [triaje] ([estado_registro_code]);
+CREATE INDEX [idx_triaje_deleted_at] ON [triaje] ([deleted_at]);
+GO
+
+
+-- =============================================================================
+-- BLOQUE 7: CELO
+-- =============================================================================
+
+-- -----------------------------------------------------------------------------
+-- celo_configuracion
+-- -----------------------------------------------------------------------------
+CREATE TABLE [celo_configuracion] (
+    [id]                        BIGINT          IDENTITY(1,1) PRIMARY KEY,
+    [nombre]                    VARCHAR(80)     NOT NULL,
+    [dias_ciclo_estandar]       INTEGER         NOT NULL,
+    [dias_alerta_previa]        INTEGER         NOT NULL,
+    [dias_tolerancia_posterior] INTEGER         NOT NULL,
+    [activo]                    BIT             NOT NULL DEFAULT 1,
+    [created_by]                BIGINT,
+    [created_at]                DATETIME2       NOT NULL DEFAULT SYSDATETIME(),
+    [updated_at]                DATETIME2       NOT NULL DEFAULT SYSDATETIME(),
+    CONSTRAINT [fk_celo_config_created_by]   FOREIGN KEY ([created_by]) REFERENCES [usuario] ([id]),
+    -- CID: Integridad — días deben ser positivos/no negativos
+    CONSTRAINT [ck_celo_config_dias_ciclo] CHECK ([dias_ciclo_estandar] > 0),
+    CONSTRAINT [ck_celo_config_dias_alerta] CHECK ([dias_alerta_previa] >= 0),
+    CONSTRAINT [ck_celo_config_dias_tol]   CHECK ([dias_tolerancia_posterior] >= 0)
+);
+GO
+
+-- CID: Disponibilidad
+CREATE INDEX [idx_celo_config_activo] ON [celo_configuracion] ([activo]);
+GO
+
+
+-- -----------------------------------------------------------------------------
+-- cat_estado_celo
+-- -----------------------------------------------------------------------------
+CREATE TABLE [cat_estado_celo] (
+    [code]        VARCHAR(30)     PRIMARY KEY,
+    [nombre]      VARCHAR(50)     NOT NULL,
+    [descripcion] VARCHAR(150),
+    CONSTRAINT [uq_cat_estado_celo_nombre] UNIQUE ([nombre])
+);
+GO
+
+
+-- -----------------------------------------------------------------------------
+-- cat_caracteristica_celo
+-- -----------------------------------------------------------------------------
+CREATE TABLE [cat_caracteristica_celo] (
+    [code]        VARCHAR(30)     PRIMARY KEY,
+    [nombre]      VARCHAR(50)     NOT NULL,
+    [descripcion] VARCHAR(150),
+    [activo]      BIT             NOT NULL DEFAULT 1,
+    CONSTRAINT [uq_cat_caracteristica_celo_nombre] UNIQUE ([nombre])
+);
+GO
+
+
+-- -----------------------------------------------------------------------------
+-- celo_registro
+-- CID: Confidencialidad — datos reproductivos sensibles.
+--   Requiere rol: rol_veterinario, rol_encargado.
+-- -----------------------------------------------------------------------------
+CREATE TABLE [celo_registro] (
+    [id]                   BIGINT          IDENTITY(1,1) PRIMARY KEY,
+    [codigo]               VARCHAR(15)     NOT NULL,
+    [fecha_hora]           DATETIME2       NOT NULL,
+    [vacuno_id]            BIGINT          NOT NULL,
+    [encargado_usuario_id] BIGINT          NOT NULL,
+    [observaciones]        VARCHAR(150),
+    [estado_registro_code] VARCHAR(30)     NOT NULL DEFAULT 'ACTIVO',
+    [created_by]           BIGINT,
+    [updated_by]           BIGINT,
+    [deleted_by]           BIGINT,
+    [created_at]           DATETIME2       NOT NULL DEFAULT SYSDATETIME(),
+    [updated_at]           DATETIME2       NOT NULL DEFAULT SYSDATETIME(),
+    [deleted_at]           DATETIME2,
+    [motivo_eliminacion]   VARCHAR(250),
+    CONSTRAINT [uq_celo_registro_codigo]       UNIQUE ([codigo]),
+    CONSTRAINT [uq_celo_registro_vacuno_fecha] UNIQUE ([vacuno_id], [fecha_hora]),
+    CONSTRAINT [fk_celo_registro_vacuno]       FOREIGN KEY ([vacuno_id])            REFERENCES [vacuno] ([id]),
+    CONSTRAINT [fk_celo_registro_encargado]    FOREIGN KEY ([encargado_usuario_id]) REFERENCES [usuario] ([id]),
+    CONSTRAINT [fk_celo_registro_estado]       FOREIGN KEY ([estado_registro_code]) REFERENCES [cat_estado_registro] ([code]),
+    CONSTRAINT [fk_celo_registro_created_by]   FOREIGN KEY ([created_by])           REFERENCES [usuario] ([id]),
+    CONSTRAINT [fk_celo_registro_updated_by]   FOREIGN KEY ([updated_by])           REFERENCES [usuario] ([id]),
+    CONSTRAINT [fk_celo_registro_deleted_by]   FOREIGN KEY ([deleted_by])           REFERENCES [usuario] ([id]),
+    -- CID: Integridad — fecha de celo no futura
+    CONSTRAINT [ck_celo_registro_fecha] CHECK ([fecha_hora] <= SYSDATETIME())
+);
+GO
+
+-- CID: Disponibilidad
+CREATE INDEX [idx_celo_registro_fecha_hora] ON [celo_registro] ([fecha_hora]);
+CREATE INDEX [idx_celo_registro_vacuno]     ON [celo_registro] ([vacuno_id]);
+CREATE INDEX [idx_celo_registro_encargado]  ON [celo_registro] ([encargado_usuario_id]);
+CREATE INDEX [idx_celo_registro_estado]     ON [celo_registro] ([estado_registro_code]);
+CREATE INDEX [idx_celo_registro_deleted_at] ON [celo_registro] ([deleted_at]);
+GO
+
+
+-- -----------------------------------------------------------------------------
+-- celo_registro_caracteristica
+-- 2FN-02: PK compuesta (celo_registro_id, caracteristica_code) — sin surrogate id.
+-- -----------------------------------------------------------------------------
+CREATE TABLE [celo_registro_caracteristica] (
+    [celo_registro_id]    BIGINT          NOT NULL,
+    [caracteristica_code] VARCHAR(30)     NOT NULL,
+    CONSTRAINT [pk_celo_reg_caract]    PRIMARY KEY ([celo_registro_id], [caracteristica_code]),
+    CONSTRAINT [fk_crc_celo_registro]  FOREIGN KEY ([celo_registro_id])   REFERENCES [celo_registro] ([id]),
+    CONSTRAINT [fk_crc_caracteristica] FOREIGN KEY ([caracteristica_code]) REFERENCES [cat_caracteristica_celo] ([code])
+);
+GO
+
+-- CID: Disponibilidad
+CREATE INDEX [idx_crc_celo_registro]  ON [celo_registro_caracteristica] ([celo_registro_id]);
+CREATE INDEX [idx_crc_caracteristica] ON [celo_registro_caracteristica] ([caracteristica_code]);
+GO
+
+
+-- -----------------------------------------------------------------------------
+-- celo_registro_caracteristica_libre
+-- -----------------------------------------------------------------------------
+CREATE TABLE [celo_registro_caracteristica_libre] (
+    [id]               BIGINT          IDENTITY(1,1) PRIMARY KEY,
+    [celo_registro_id] BIGINT          NOT NULL,
+    [descripcion]      VARCHAR(80)     NOT NULL,
+    [created_at]       DATETIME2       NOT NULL DEFAULT SYSDATETIME(),
+    CONSTRAINT [fk_crcl_celo_registro] FOREIGN KEY ([celo_registro_id])
+        REFERENCES [celo_registro] ([id])
+);
+GO
+
+-- CID: Disponibilidad
+CREATE INDEX [idx_crcl_celo_registro] ON [celo_registro_caracteristica_libre] ([celo_registro_id]);
+GO
+
+
+-- =============================================================================
+-- BLOQUE 8: REPRODUCCIÓN / FECUNDACIÓN
+-- =============================================================================
+
+-- -----------------------------------------------------------------------------
+-- cat_tipo_fecundacion
+-- -----------------------------------------------------------------------------
+CREATE TABLE [cat_tipo_fecundacion] (
+    [code]        VARCHAR(40)     PRIMARY KEY,
+    [nombre]      VARCHAR(80)     NOT NULL,
+    [descripcion] VARCHAR(200),
+    CONSTRAINT [uq_cat_tipo_fecundacion_nombre] UNIQUE ([nombre])
+);
+GO
+
+
+-- -----------------------------------------------------------------------------
+-- cat_resultado_fecundacion
+-- -----------------------------------------------------------------------------
+CREATE TABLE [cat_resultado_fecundacion] (
+    [code]        VARCHAR(30)     PRIMARY KEY,
+    [nombre]      VARCHAR(60)     NOT NULL,
+    [descripcion] VARCHAR(150),
+    CONSTRAINT [uq_cat_resultado_fecundacion_nombre] UNIQUE ([nombre])
+);
+GO
+
+
+-- -----------------------------------------------------------------------------
+-- cat_estado_fecundacion_vacuno
+-- -----------------------------------------------------------------------------
+CREATE TABLE [cat_estado_fecundacion_vacuno] (
+    [code]        VARCHAR(30)     PRIMARY KEY,
+    [nombre]      VARCHAR(60)     NOT NULL,
+    [descripcion] VARCHAR(150),
+    CONSTRAINT [uq_cat_estado_fec_vacuno_nombre] UNIQUE ([nombre])
+);
+GO
+
+
+-- -----------------------------------------------------------------------------
+-- cat_estado_trazabilidad
+-- -----------------------------------------------------------------------------
+CREATE TABLE [cat_estado_trazabilidad] (
+    [code]        VARCHAR(30)     PRIMARY KEY,
+    [nombre]      VARCHAR(60)     NOT NULL,
+    [descripcion] VARCHAR(150),
+    CONSTRAINT [uq_cat_estado_trazabilidad_nombre] UNIQUE ([nombre])
+);
+GO
+
+
+-- -----------------------------------------------------------------------------
+-- reproductor_externo
+-- CID: Confidencialidad — puede contener datos de terceros.
+--   Requiere rol: rol_veterinario, rol_admin.
+-- -----------------------------------------------------------------------------
+CREATE TABLE [reproductor_externo] (
+    [id]             BIGINT          IDENTITY(1,1) PRIMARY KEY,
+    [nombre]         VARCHAR(100)    NOT NULL,
+    [codigo_externo] VARCHAR(50),
+    [sexo_code]      VARCHAR(10),
+    [descripcion]    VARCHAR(150),
+    [activo]         BIT             NOT NULL DEFAULT 1,
+    [created_by]     BIGINT,
+    [created_at]     DATETIME2       NOT NULL DEFAULT SYSDATETIME(),
+    CONSTRAINT [fk_reproductor_sexo]       FOREIGN KEY ([sexo_code])   REFERENCES [cat_sexo] ([code]),
+    CONSTRAINT [fk_reproductor_created_by] FOREIGN KEY ([created_by])  REFERENCES [usuario] ([id])
+);
+GO
+
+-- CID: Disponibilidad
+CREATE INDEX [idx_reproductor_nombre] ON [reproductor_externo] ([nombre]);
+CREATE INDEX [idx_reproductor_codigo] ON [reproductor_externo] ([codigo_externo]);
+GO
+
+
+-- -----------------------------------------------------------------------------
+-- fecundacion
+-- 3FN-06: codigo_semen y codigo_embrion movidos a subentidades.
+-- 3FN-07: donante movido a fecundacion_donante.
+-- CID: Confidencialidad — datos reproductivos médicos sensibles.
+--   Requiere rol: rol_veterinario.
+-- -----------------------------------------------------------------------------
+CREATE TABLE [fecundacion] (
+    [id]                         BIGINT          IDENTITY(1,1) PRIMARY KEY,
+    [codigo]                     VARCHAR(15)     NOT NULL,
+    [tipo_fecundacion_code]      VARCHAR(40)     NOT NULL,
+    [vacuno_receptor_id]         BIGINT          NOT NULL,
+    [celo_registro_id]           BIGINT,
+    [fecha_procedimiento]        DATE            NOT NULL,
+    [responsable_id]             BIGINT          NOT NULL,
+    [resultado_code]             VARCHAR(30)     NOT NULL,
+    [observaciones_veterinarias] VARCHAR(250),
+    [created_by]                 BIGINT,
+    [updated_by]                 BIGINT,
+    [created_at]                 DATETIME2       NOT NULL DEFAULT SYSDATETIME(),
+    [updated_at]                 DATETIME2       NOT NULL DEFAULT SYSDATETIME(),
+    CONSTRAINT [uq_fecundacion_codigo]      UNIQUE ([codigo]),
+    CONSTRAINT [fk_fecundacion_tipo]        FOREIGN KEY ([tipo_fecundacion_code]) REFERENCES [cat_tipo_fecundacion] ([code]),
+    CONSTRAINT [fk_fecundacion_receptor]    FOREIGN KEY ([vacuno_receptor_id])    REFERENCES [vacuno] ([id]),
+    CONSTRAINT [fk_fecundacion_celo]        FOREIGN KEY ([celo_registro_id])      REFERENCES [celo_registro] ([id]),
+    CONSTRAINT [fk_fecundacion_responsable] FOREIGN KEY ([responsable_id])        REFERENCES [responsable] ([id]),
+    CONSTRAINT [fk_fecundacion_resultado]   FOREIGN KEY ([resultado_code])        REFERENCES [cat_resultado_fecundacion] ([code]),
+    CONSTRAINT [fk_fecundacion_created_by]  FOREIGN KEY ([created_by])            REFERENCES [usuario] ([id]),
+    CONSTRAINT [fk_fecundacion_updated_by]  FOREIGN KEY ([updated_by])            REFERENCES [usuario] ([id]),
+    -- CID: Integridad — fecha de procedimiento no futura
+    CONSTRAINT [ck_fecundacion_fecha] CHECK ([fecha_procedimiento] <= CAST(GETDATE() AS DATE))
+);
+GO
+
+-- CID: Disponibilidad
+CREATE INDEX [idx_fecundacion_tipo]        ON [fecundacion] ([tipo_fecundacion_code]);
+CREATE INDEX [idx_fecundacion_receptor]    ON [fecundacion] ([vacuno_receptor_id]);
+CREATE INDEX [idx_fecundacion_celo]        ON [fecundacion] ([celo_registro_id]);
+CREATE INDEX [idx_fecundacion_fecha]       ON [fecundacion] ([fecha_procedimiento]);
+CREATE INDEX [idx_fecundacion_responsable] ON [fecundacion] ([responsable_id]);
+CREATE INDEX [idx_fecundacion_resultado]   ON [fecundacion] ([resultado_code]);
+GO
+
+
+-- -----------------------------------------------------------------------------
+-- fecundacion_donante  [NUEVA — 3FN-07]
+-- Regla: exactamente uno de (vacuno_donante_id, externo_donante_id) debe ser NOT NULL.
+-- CID: Confidencialidad — datos de reproductores (internos/externos).
+-- -----------------------------------------------------------------------------
+CREATE TABLE [fecundacion_donante] (
+    [fecundacion_id]     BIGINT          NOT NULL,
+    [tipo_donante]       VARCHAR(10)     NOT NULL,  -- 'INTERNO' | 'EXTERNO'
+    [vacuno_donante_id]  BIGINT,
+    [externo_donante_id] BIGINT,
+    CONSTRAINT [pk_fecundacion_donante]   PRIMARY KEY ([fecundacion_id]),
+    CONSTRAINT [fk_fd_fecundacion]        FOREIGN KEY ([fecundacion_id])     REFERENCES [fecundacion] ([id]),
+    CONSTRAINT [fk_fd_vacuno_donante]     FOREIGN KEY ([vacuno_donante_id])  REFERENCES [vacuno] ([id]),
+    CONSTRAINT [fk_fd_externo_donante]    FOREIGN KEY ([externo_donante_id]) REFERENCES [reproductor_externo] ([id]),
+    -- CID: Integridad — exactamente un donante según tipo
+    CONSTRAINT [ck_fd_tipo_donante] CHECK ([tipo_donante] IN ('INTERNO', 'EXTERNO')),
+    CONSTRAINT [ck_fd_donante_exclusivo] CHECK (
+        ([tipo_donante] = 'INTERNO' AND [vacuno_donante_id]  IS NOT NULL AND [externo_donante_id] IS NULL) OR
+        ([tipo_donante] = 'EXTERNO' AND [externo_donante_id] IS NOT NULL AND [vacuno_donante_id]  IS NULL)
+    )
+);
+GO
+
+-- CID: Disponibilidad
+CREATE INDEX [idx_fd_vacuno_donante]  ON [fecundacion_donante] ([vacuno_donante_id]);
+CREATE INDEX [idx_fd_externo_donante] ON [fecundacion_donante] ([externo_donante_id]);
+GO
+
+
+-- -----------------------------------------------------------------------------
+-- fecundacion_inseminacion  [NUEVA — 3FN-06]
+-- -----------------------------------------------------------------------------
+CREATE TABLE [fecundacion_inseminacion] (
+    [fecundacion_id] BIGINT          PRIMARY KEY,
+    [codigo_semen]   VARCHAR(30)     NOT NULL,
+    CONSTRAINT [fk_fins_fecundacion] FOREIGN KEY ([fecundacion_id]) REFERENCES [fecundacion] ([id])
+);
+GO
+
+
+-- -----------------------------------------------------------------------------
+-- fecundacion_embrion  [NUEVA — 3FN-06]
+-- -----------------------------------------------------------------------------
+CREATE TABLE [fecundacion_embrion] (
+    [fecundacion_id] BIGINT          PRIMARY KEY,
+    [codigo_embrion] VARCHAR(30)     NOT NULL,
+    CONSTRAINT [fk_femb_fecundacion] FOREIGN KEY ([fecundacion_id]) REFERENCES [fecundacion] ([id])
+);
+GO
+
+
+-- -----------------------------------------------------------------------------
+-- fecundacion_cria
+-- -----------------------------------------------------------------------------
+CREATE TABLE [fecundacion_cria] (
+    [id]                      BIGINT          IDENTITY(1,1) PRIMARY KEY,
+    [fecundacion_id]          BIGINT          NOT NULL,
+    [vacuno_hijo_id]          BIGINT          NOT NULL,
+    [estado_trazabilidad_code] VARCHAR(30)    NOT NULL DEFAULT 'VALIDA',
+    [fecha_vinculacion]       DATE            NOT NULL,
+    [observaciones]           VARCHAR(150),
+    [created_by]              BIGINT,
+    [updated_by]              BIGINT,
+    [created_at]              DATETIME2       NOT NULL DEFAULT SYSDATETIME(),
+    [updated_at]              DATETIME2       NOT NULL DEFAULT SYSDATETIME(),
+    CONSTRAINT [uq_fecundacion_cria_fec_vacuno] UNIQUE ([fecundacion_id], [vacuno_hijo_id]),
+    CONSTRAINT [fk_fc_fecundacion]  FOREIGN KEY ([fecundacion_id])           REFERENCES [fecundacion] ([id]),
+    CONSTRAINT [fk_fc_vacuno_hijo]  FOREIGN KEY ([vacuno_hijo_id])           REFERENCES [vacuno] ([id]),
+    CONSTRAINT [fk_fc_trazabilidad] FOREIGN KEY ([estado_trazabilidad_code]) REFERENCES [cat_estado_trazabilidad] ([code]),
+    CONSTRAINT [fk_fc_created_by]   FOREIGN KEY ([created_by])               REFERENCES [usuario] ([id]),
+    CONSTRAINT [fk_fc_updated_by]   FOREIGN KEY ([updated_by])               REFERENCES [usuario] ([id])
+);
+GO
+
+-- CID: Disponibilidad
+CREATE INDEX [idx_fc_fecundacion]  ON [fecundacion_cria] ([fecundacion_id]);
+CREATE INDEX [idx_fc_vacuno_hijo]  ON [fecundacion_cria] ([vacuno_hijo_id]);
+CREATE INDEX [idx_fc_trazabilidad] ON [fecundacion_cria] ([estado_trazabilidad_code]);
+GO
+
+
+-- -----------------------------------------------------------------------------
+-- vacuno_estado_fecundacion_historial
+-- Campo vigente eliminado: estado vigente = MAX(created_at) por vacuno_id (3FN-08).
+-- CID: Confidencialidad — historial reproductivo sensible.
+--   Requiere rol: rol_veterinario, rol_admin.
+-- -----------------------------------------------------------------------------
+CREATE TABLE [vacuno_estado_fecundacion_historial] (
+    [id]                      BIGINT          IDENTITY(1,1) PRIMARY KEY,
+    [vacuno_id]               BIGINT          NOT NULL,
+    [estado_fecundacion_code] VARCHAR(30)     NOT NULL,
+    [fecundacion_id]          BIGINT,
+    [fecha_actualizacion]     DATE            NOT NULL,
+    [observaciones]           VARCHAR(150),
+    [created_by]              BIGINT,
+    [deleted_by]              BIGINT,
+    [created_at]              DATETIME2       NOT NULL DEFAULT SYSDATETIME(),
+    [deleted_at]              DATETIME2,
+    [motivo_eliminacion]      VARCHAR(250),
+    CONSTRAINT [fk_vefh_vacuno]      FOREIGN KEY ([vacuno_id])               REFERENCES [vacuno] ([id]),
+    CONSTRAINT [fk_vefh_estado]      FOREIGN KEY ([estado_fecundacion_code]) REFERENCES [cat_estado_fecundacion_vacuno] ([code]),
+    CONSTRAINT [fk_vefh_fecundacion] FOREIGN KEY ([fecundacion_id])          REFERENCES [fecundacion] ([id]),
+    CONSTRAINT [fk_vefh_created_by]  FOREIGN KEY ([created_by])              REFERENCES [usuario] ([id]),
+    CONSTRAINT [fk_vefh_deleted_by]  FOREIGN KEY ([deleted_by])              REFERENCES [usuario] ([id])
+);
+GO
+
+-- CID: Disponibilidad
+CREATE INDEX [idx_vefh_vacuno]      ON [vacuno_estado_fecundacion_historial] ([vacuno_id]);
+CREATE INDEX [idx_vefh_estado]      ON [vacuno_estado_fecundacion_historial] ([estado_fecundacion_code]);
+CREATE INDEX [idx_vefh_fecundacion] ON [vacuno_estado_fecundacion_historial] ([fecundacion_id]);
+CREATE INDEX [idx_vefh_fecha]       ON [vacuno_estado_fecundacion_historial] ([fecha_actualizacion]);
+CREATE INDEX [idx_vefh_created_at]  ON [vacuno_estado_fecundacion_historial] ([created_at]);
+CREATE INDEX [idx_vefh_deleted_at]  ON [vacuno_estado_fecundacion_historial] ([deleted_at]);
+GO
+
+
+-- =============================================================================
+-- BLOQUE 9: VISTAS
+-- Los campos derivados se calculan en tiempo de consulta sobre las fuentes de verdad.
+-- =============================================================================
+
+-- -----------------------------------------------------------------------------
+-- v_celo_estado_vacuno
+-- Calcula en tiempo de consulta lo que antes era tabla celo_estado_vacuno.
+-- Nota T-SQL: DISTINCT ON no existe; se reemplaza por subconsulta con ROW_NUMBER.
+-- Nota T-SQL: ::DATE se reemplaza por CAST(... AS DATE).
+-- Nota T-SQL: TRUE se reemplaza por 1.
+-- -----------------------------------------------------------------------------
+CREATE VIEW [v_celo_estado_vacuno] AS
+SELECT
+    v.[id]                                                              AS vacuno_id,
+    v.[nombre]                                                          AS vacuno_nombre,
+    v.[sexo_code],
+    -- Último celo registrado (no eliminado)
+    CAST(MAX(cr.[fecha_hora]) AS DATE)                                  AS fecha_ultimo_celo,
+    -- Conteo de celos válidos
+    COUNT(cr.[id])                                                      AS veces_celo,
+    -- Crías vinculadas
+    COUNT(DISTINCT fc.[id])                                             AS crias,
+    -- Fecha estimada próximo celo
+    DATEADD(
+        DAY,
+        (SELECT TOP 1 [dias_ciclo_estandar] FROM [celo_configuracion]
+         WHERE [activo] = 1 ORDER BY [updated_at] DESC),
+        CAST(MAX(cr.[fecha_hora]) AS DATE)
+    )                                                                   AS fecha_proximo_celo_estimada,
+    -- Días restantes (negativo = ya pasó)
+    DATEDIFF(
+        DAY,
+        CAST(GETDATE() AS DATE),
+        DATEADD(
+            DAY,
+            (SELECT TOP 1 [dias_ciclo_estandar] FROM [celo_configuracion]
+             WHERE [activo] = 1 ORDER BY [updated_at] DESC),
+            CAST(MAX(cr.[fecha_hora]) AS DATE)
+        )
+    )                                                                   AS dias_restantes,
+    -- Estado calculado según ventana de alerta/tolerancia
+    CASE
+        WHEN MAX(cr.[fecha_hora]) IS NULL THEN 'SIN_DATOS'
+        WHEN DATEDIFF(DAY, CAST(GETDATE() AS DATE),
+             DATEADD(DAY,
+                (SELECT TOP 1 [dias_ciclo_estandar] FROM [celo_configuracion]
+                 WHERE [activo] = 1 ORDER BY [updated_at] DESC),
+                CAST(MAX(cr.[fecha_hora]) AS DATE))
+             ) BETWEEN 0 AND
+             (SELECT TOP 1 [dias_alerta_previa] FROM [celo_configuracion]
+              WHERE [activo] = 1 ORDER BY [updated_at] DESC)
+        THEN 'PROXIMO'
+        WHEN DATEDIFF(DAY, CAST(GETDATE() AS DATE),
+             DATEADD(DAY,
+                (SELECT TOP 1 [dias_ciclo_estandar] FROM [celo_configuracion]
+                 WHERE [activo] = 1 ORDER BY [updated_at] DESC),
+                CAST(MAX(cr.[fecha_hora]) AS DATE))
+             ) BETWEEN
+             -(SELECT TOP 1 [dias_tolerancia_posterior] FROM [celo_configuracion]
+               WHERE [activo] = 1 ORDER BY [updated_at] DESC) AND -1
+        THEN 'EN_CELO'
+        WHEN DATEDIFF(DAY, CAST(GETDATE() AS DATE),
+             DATEADD(DAY,
+                (SELECT TOP 1 [dias_ciclo_estandar] FROM [celo_configuracion]
+                 WHERE [activo] = 1 ORDER BY [updated_at] DESC),
+                CAST(MAX(cr.[fecha_hora]) AS DATE))
+             ) < -(SELECT TOP 1 [dias_tolerancia_posterior] FROM [celo_configuracion]
+                   WHERE [activo] = 1 ORDER BY [updated_at] DESC)
+        THEN 'PASO'
+        ELSE 'SIN_DATOS'
+    END                                                                 AS estado_celo_calculado
+FROM
+    [vacuno] v
+    LEFT JOIN [celo_registro] cr
+        ON cr.[vacuno_id] = v.[id]
+        AND cr.[deleted_at] IS NULL
+        AND cr.[estado_registro_code] = 'ACTIVO'
+    LEFT JOIN [fecundacion_cria] fc
+        ON fc.[vacuno_hijo_id] = v.[id]
+WHERE
+    v.[deleted_at] IS NULL
+    AND v.[sexo_code] = 'HEMBRA'
+GROUP BY
+    v.[id], v.[nombre], v.[sexo_code];
+GO
+
+
+-- -----------------------------------------------------------------------------
+-- v_vacuno_utilizacion_vigente
+-- Estado de utilización vigente por vacuno (tipo con MAX created_at).
+-- Nota T-SQL: DISTINCT ON reemplazado por ROW_NUMBER() OVER (PARTITION BY).
+-- -----------------------------------------------------------------------------
+CREATE VIEW [v_vacuno_utilizacion_vigente] AS
+SELECT
+    [vacuno_id],
+    [tipo_utilizacion_code],
+    [created_at] AS fecha_desde
+FROM (
+    SELECT
+        [vacuno_id],
+        [tipo_utilizacion_code],
+        [created_at],
+        ROW_NUMBER() OVER (PARTITION BY [vacuno_id] ORDER BY [created_at] DESC) AS rn
+    FROM [vacuno_utilizacion_historial]
+) sub
+WHERE rn = 1;
+GO
+
+
+-- -----------------------------------------------------------------------------
+-- v_vacuno_estado_vigente
+-- Estado sanitario vigente por vacuno (registro con MAX created_at).
+-- Nota T-SQL: DISTINCT ON reemplazado por ROW_NUMBER() OVER (PARTITION BY).
+-- -----------------------------------------------------------------------------
+CREATE VIEW [v_vacuno_estado_vigente] AS
+SELECT
+    [vacuno_id],
+    [estado_code],
+    [fecha_estado],
+    [created_at] AS fecha_registro
+FROM (
+    SELECT
+        [vacuno_id],
+        [estado_code],
+        [fecha_estado],
+        [created_at],
+        ROW_NUMBER() OVER (PARTITION BY [vacuno_id] ORDER BY [created_at] DESC) AS rn
+    FROM [vacuno_estado_historial]
+) sub
+WHERE rn = 1;
+GO
+
+
+-- -----------------------------------------------------------------------------
+-- v_produccion_leche_estandar_vigente
+-- Estándar de litros vigente por vacuno (o general si vacuno_id IS NULL).
+-- Nota T-SQL: DISTINCT ON reemplazado por ROW_NUMBER() OVER (PARTITION BY).
+-- Nota T-SQL: CURRENT_DATE reemplazado por CAST(GETDATE() AS DATE).
+-- -----------------------------------------------------------------------------
+CREATE VIEW [v_produccion_leche_estandar_vigente] AS
+SELECT
+    [vacuno_id],
+    [litros_esperados_dia],
+    [fecha_inicio],
+    [descripcion]
+FROM (
+    SELECT
+        [vacuno_id],
+        [litros_esperados_dia],
+        [fecha_inicio],
+        [descripcion],
+        ROW_NUMBER() OVER (PARTITION BY [vacuno_id] ORDER BY [fecha_inicio] DESC) AS rn
+    FROM [produccion_leche_estandar]
+    WHERE
+        [fecha_fin] IS NULL
+        OR [fecha_fin] >= CAST(GETDATE() AS DATE)
+) sub
+WHERE rn = 1;
+GO
+
+
+-- =============================================================================
+-- FIN DEL SCRIPT
+-- Motor: SQL Server 2022
+-- Normalización: 3FN estricta
+-- Tríada CID: comentarios distribuidos en el script
+-- Ley 29733: tablas sensibles marcadas con rol sugerido
+-- Notas de migración clave:
+--   · GENERATED ALWAYS AS IDENTITY → BIGINT IDENTITY(1,1)
+--   · TIMESTAMPTZ → DATETIME2
+--   · BOOLEAN → BIT  (TRUE/FALSE → 1/0)
+--   · JSONB → NVARCHAR(MAX)
+--   · INET → NVARCHAR(45)
+--   · TEXT → NVARCHAR(MAX)
+--   · NOW() → SYSDATETIME()
+--   · CURRENT_DATE → CAST(GETDATE() AS DATE)
+--   · UNIQUE parcial (WHERE es_principal = TRUE) → Filtered Index (WHERE es_principal = 1)
+--   · DISTINCT ON → ROW_NUMBER() OVER (PARTITION BY ... ORDER BY ...)
+--   · Catálogos con PK VARCHAR: sin IDENTITY (correcto)
+-- =============================================================================

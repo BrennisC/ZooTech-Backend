@@ -87,9 +87,9 @@ namespace ZooTech.InterfaceAdapters.Middleware
             {
                 return cleanHost[..^(".localhost".Length)];
             }
-            if (cleanHost.EndsWith(".zentrycorp.dev"))
+            if (cleanHost.EndsWith($".{_baseDomain}"))
             {
-                return cleanHost[..^(".zentrycorp.dev".Length)];
+                return cleanHost[..^($".{_baseDomain}".Length)];
             }
 
             if (!cleanHost.EndsWith("." + _baseDomain))

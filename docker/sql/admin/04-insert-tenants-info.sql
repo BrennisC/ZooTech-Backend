@@ -40,10 +40,9 @@ FROM
 (
 VALUES
 
-('GRANJA_ZOOTECNIA_UNAS',N'zootecniaunas',N'Granja Zootecnia UNAS',N'Granja Zootecnia Universidad Nacional Agraría de la Selva',N'zootecnia@unas.edu.pe',N'+51 987 654 321',N'America/Lima',N'ACTIVE'),
-('AGROPECUARIA_EL_ROBLE',N'elroble',N'Agropecuaria El Roble',N'Agropecuaria El Roble S.A.',N'contacto@elroble.com',N'+57 300 123 4567',N'America/Bogota',N'ACTIVE'),
-('LACTEOS_DEL_VALLE',N'lacteosdelvalle',N'Lácteos del Valle',N'Lácteos del Valle Ltda.',N'contacto@lacteosdelvalle.com',N'+56 9 8765 4321',N'America/Santiago',N'TRIAL'),
-('GRANJA_LOS_ANDES',N'losandes',N'Granja Los Andes',N'Granja Los Andes S.R.L.',N'contacto@granjalosandes.com',N'+593 99 876 5432',N'America/Guayaquil',N'SUSPENDED')
+('GANADERA_ALTO_HUALLAGA',N'altohuallaga',N'Ganadera Alto Huallaga',N'Ganadera Alto Huallaga S.A.C.',N'contacto@altohuallaga.com',N'+51 962 200 200',N'America/Lima',N'ACTIVE'),
+('AGROPECUARIA_MONZON',N'monzon',N'Agropecuaria Monzón',N'Agropecuaria Monzón S.R.L.',N'contacto@agromonzon.com',N'+51 962 300 300',N'America/Lima',N'ACTIVE'),
+('FUNDO_RIO_VERDE',N'rioverde',N'Fundo Río Verde',N'Fundo Río Verde S.A.C.',N'contacto@fundorioverde.com',N'+51 962 400 400',N'America/Lima',N'TRIAL')
 
 ) V (Code, Subdomain, DisplayName, LegalName, Email, Phone, Timezone, Status)
 WHERE NOT EXISTS
@@ -88,10 +87,9 @@ JOIN
 (
 VALUES
 
-('GRANJA_ZOOTECNIA_UNAS',N'Perú',N'Húanuco',N'Rupa Rupa',N'Tingo María',N'Carretera Central km. 1.21',NULL),
-('AGROPECUARIA_EL_ROBLE',N'Colombia',N'Antioquia',N'Valle de Aburrá',N'Medellín',N'Calle 10 # 45-67',NULL),
-('LACTEOS_DEL_VALLE',N'Chile',N'Región Metropolitana',N'Santiago',N'Santiago',N'Av. Providencia 2020',N'Oficina 501'),
-('GRANJA_LOS_ANDES',N'Ecuador',N'Pichincha',N'Quito',N'Quito',N'Av. Amazonas 456',NULL)
+('GANADERA_ALTO_HUALLAGA',N'Perú',N'Húanuco',N'Leoncio Prado',N'Tingo María',N'Carretera Fernando Belaúnde Terry km 5',NULL),
+('AGROPECUARIA_MONZON',N'Perú',N'Húanuco',N'Huamalíes',N'Monzón',N'Plaza de Armas s/n',NULL),
+('FUNDO_RIO_VERDE',N'Perú',N'Húanuco',N'Pachitea',N'Panao',N'Camino a Chaglla km 3',NULL)
 
 ) V (Code, Country, State, Province, City, AddressLine1, AddressLine2)
     ON t.code = V.Code
@@ -139,10 +137,9 @@ JOIN
 (
 VALUES
 
-('GRANJA_ZOOTECNIA_UNAS',N'#2e7d32',N'#1b5e20',N'#e8f5e9',N'https://cdn.zootech.com/tenants/zootecniaunas/logo.png',N'https://cdn.zootech.com/tenants/zootecniaunas/favicon.ico',N'https://cdn.zootech.com/tenants/zootecniaunas/login-bg.jpg'),
-('AGROPECUARIA_EL_ROBLE',N'#1565c0',N'#0d47a1',N'#e3f2fd',N'https://cdn.zootech.com/tenants/elroble/logo.png',N'https://cdn.zootech.com/tenants/elroble/favicon.ico',N'https://cdn.zootech.com/tenants/elroble/login-bg.jpg'),
-('LACTEOS_DEL_VALLE',N'#6a1b9a',N'#4a148c',N'#f3e5f5',N'https://cdn.zootech.com/tenants/lacteosdelvalle/logo.png',N'https://cdn.zootech.com/tenants/lacteosdelvalle/favicon.ico',N'https://cdn.zootech.com/tenants/lacteosdelvalle/login-bg.jpg'),
-('GRANJA_LOS_ANDES',N'#b45309',N'#7c2d12',N'#fef3e7',N'https://cdn.zootech.com/tenants/losandes/logo.png',N'https://cdn.zootech.com/tenants/losandes/favicon.ico',N'https://cdn.zootech.com/tenants/losandes/login-bg.jpg')
+('GANADERA_ALTO_HUALLAGA',N'#2e7d32',N'#1b5e20',N'#e8f5e9',N'https://cdn.zootech.com/tenants/altohuallaga/logo.png',N'https://cdn.zootech.com/tenants/altohuallaga/favicon.ico',N'https://cdn.zootech.com/tenants/altohuallaga/login-bg.jpg'),
+('AGROPECUARIA_MONZON',N'#8d6e63',N'#5d4037',N'#efebe9',N'https://cdn.zootech.com/tenants/monzon/logo.png',N'https://cdn.zootech.com/tenants/monzon/favicon.ico',N'https://cdn.zootech.com/tenants/monzon/login-bg.jpg'),
+('FUNDO_RIO_VERDE',N'#00838f',N'#006064',N'#e0f7fa',N'https://cdn.zootech.com/tenants/rioverde/logo.png',N'https://cdn.zootech.com/tenants/rioverde/favicon.ico',N'https://cdn.zootech.com/tenants/rioverde/login-bg.jpg')
 
 ) V (Code, PrimaryColor, SecondaryColor, AccentColor, LogoUrl, FaviconUrl, LoginBackgroundUrl)
     ON t.code = V.Code
@@ -157,6 +154,9 @@ WHERE NOT EXISTS
 -- TENANT DATABASE CONNECTIONS
 -- NOTA: connection_string_encrypted es un valor PLACEHOLDER.
 -- Reemplazar por la cadena de conexion real cifrada antes de usar en produccion.
+-- Cada organizacion tiene su PROPIA base de datos (una por tenant), creada
+-- ejecutando "Script - Create - Tenant DB.sql" con el nombre de base indicado
+-- aqui, y luego poblada con datos masivos usando el ZooTechDataSeeder.
 ------------------------------------------------------------
 
 INSERT INTO tenant_database_connections
@@ -188,10 +188,9 @@ JOIN
 (
 VALUES
 
-('GRANJA_ZOOTECNIA_UNAS',N'ZooTech_ZootecniaUnas_Db',N'sql-zootech-prod01.database.windows.net',N'SQLSERVER',N''),
-('AGROPECUARIA_EL_ROBLE',N'ZooTech_ElRoble_Db',N'sql-zootech-prod01.database.windows.net',N'SQLSERVER',N''),
-('LACTEOS_DEL_VALLE',N'ZooTech_LacteosDelValle_Db',N'sql-zootech-prod01.database.windows.net',N'SQLSERVER',N''),
-('GRANJA_LOS_ANDES',N'ZooTech_LosAndes_Db',N'sql-zootech-prod01.database.windows.net',N'SQLSERVER',N'')
+('GANADERA_ALTO_HUALLAGA',N'$(ZOOTECH_TENANT_DB_NAME_1)',N'$(ZOOTECH_DB_SQLSERVER_CONTAINER_NAME)',N'SQLSERVER',N''),
+('AGROPECUARIA_MONZON',N'$(ZOOTECH_TENANT_DB_NAME_2)',N'$(ZOOTECH_DB_SQLSERVER_CONTAINER_NAME)',N'SQLSERVER',N''),
+('FUNDO_RIO_VERDE',N'$(ZOOTECH_TENANT_DB_NAME_2)',N'$(ZOOTECH_DB_SQLSERVER_CONTAINER_NAME)',N'SQLSERVER',N'')
 
 ) V (Code, DatabaseName, ServerName, Provider, ConnectionStringEncrypted)
     ON t.code = V.Code
@@ -204,7 +203,7 @@ WHERE NOT EXISTS
 
 ------------------------------------------------------------
 -- TENANT FEATURES
--- Asocia los 4 tenants nuevos con TODAS las features activas actualmente
+-- Asocia las 4 organizaciones nuevas con TODAS las features activas actualmente
 -- definidas en la plataforma (tabla features).
 ------------------------------------------------------------
 
@@ -228,7 +227,7 @@ SELECT
     NULL
 FROM tenants t
 CROSS JOIN features f
-WHERE t.code IN ('GRANJA_ZOOTECNIA_UNAS','AGROPECUARIA_EL_ROBLE','LACTEOS_DEL_VALLE','GRANJA_LOS_ANDES')
+WHERE t.code IN ('GANADERA_ALTO_HUALLAGA','AGROPECUARIA_MONZON','FUNDO_RIO_VERDE')
   AND f.is_active = 1
   AND f.deleted_at IS NULL
   AND NOT EXISTS
@@ -241,7 +240,7 @@ WHERE t.code IN ('GRANJA_ZOOTECNIA_UNAS','AGROPECUARIA_EL_ROBLE','LACTEOS_DEL_VA
 
 ------------------------------------------------------------
 -- SETTING VALUES
--- Asocia los 4 tenants nuevos con TODOS los setting_definitions activos
+-- Asocia las 4 organizaciones nuevas con TODOS los setting_definitions activos
 -- actualmente definidos (VACUNOS, SANIDAD, PRODUCCION_LECHE), usando el
 -- default_value de cada definicion como valor inicial a nivel TENANT.
 ------------------------------------------------------------
@@ -272,7 +271,7 @@ SELECT
     NULL
 FROM tenants t
 CROSS JOIN setting_definitions sd
-WHERE t.code IN ('GRANJA_ZOOTECNIA_UNAS','AGROPECUARIA_EL_ROBLE','LACTEOS_DEL_VALLE','GRANJA_LOS_ANDES')
+WHERE t.code IN ('GANADERA_ALTO_HUALLAGA','AGROPECUARIA_MONZON','FUNDO_RIO_VERDE')
   AND sd.is_active = 1
   AND sd.deleted_at IS NULL
   AND sd.default_value IS NOT NULL
@@ -288,7 +287,7 @@ WHERE t.code IN ('GRANJA_ZOOTECNIA_UNAS','AGROPECUARIA_EL_ROBLE','LACTEOS_DEL_VA
 
 ------------------------------------------------------------
 -- TENANT BUSINESS RULES
--- Asocia los 4 tenants nuevos con TODAS las reglas de negocio activas
+-- Asocia las 4 organizaciones nuevas con TODAS las reglas de negocio activas
 -- actualmente definidas en rule_definitions.
 ------------------------------------------------------------
 
@@ -322,7 +321,7 @@ SELECT
     NULL
 FROM tenants t
 CROSS JOIN rule_definitions rd
-WHERE t.code IN ('GRANJA_ZOOTECNIA_UNAS','AGROPECUARIA_EL_ROBLE','LACTEOS_DEL_VALLE','GRANJA_LOS_ANDES')
+WHERE t.code IN ('GANADERA_ALTO_HUALLAGA','AGROPECUARIA_MONZON','FUNDO_RIO_VERDE')
   AND rd.is_active = 1
   AND rd.deleted_at IS NULL
   AND NOT EXISTS

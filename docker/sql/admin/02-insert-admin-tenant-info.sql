@@ -22,14 +22,14 @@ BEGIN TRY
     )
     VALUES
     (
-        'ADMIN',
-        'admin',
-        'ZooTech Admin',
-        'ZooTech Admin S.A.C.',
-        'zootech@admin.com',
+        N'$(ZOOTECH_ADMIN_TENANT_CODE)',
+        N'$(MULTITENANT_ADMIN_SUB_DOMAIN)',
+        N'$(ZOOTECH_ADMIN_TENANT_DISPLAY_NAME)',
+        N'$(ZOOTECH_ADMIN_TENANT_LEGAL_NAME)',
+        N'$(ZOOTECH_ADMIN_TENANT_EMAIL)',
         '+51 999 888 777',
-        'America/Lima',
-        'ACTIVE',
+        N'$(ZOOTECH_ADMIN_TENANT_TIMEZONE)',
+        N'$(ZOOTECH_ADMIN_TENANT_STATUS)',
         NULL,
         SYSDATETIMEOFFSET()
     );
@@ -58,7 +58,7 @@ BEGIN TRY
         'Huánuco',
         'Leoncio Prado',
         'Tingo María',
-        'Av. Alameda Perú 123',
+        'Jr. Raymondi 350',
         NULL,
         NULL,
         SYSDATETIMEOFFSET()
@@ -83,12 +83,12 @@ BEGIN TRY
     VALUES
     (
         @TenantId,
-        '#2E7D32',
-        '#1565C0',
-        '#F9A825',
-        '',
-        '',
-        '',
+        '#37474f',
+        '#263238',
+        '#eceff1',
+        'https://cdn.zootech.com/tenants/soporte/logo.png',
+        'https://cdn.zootech.com/tenants/soporte/favicon.ico',
+        'https://cdn.zootech.com/tenants/soporte/login-bg.jpg',
         NULL,
         NULL,
         SYSDATETIMEOFFSET()
@@ -110,8 +110,8 @@ INSERT INTO tenant_database_connections
 VALUES
 (
     @TenantId,
-    'ZooTech_Admin_Db',
-    'localhost',
+    N'$(MULTITENANT_ADMIN_DATABASE_NAME)',
+    N'$(ZOOTECH_DB_SQLSERVER_CONTAINER_NAME)',
     'SQLSERVER',
     NULL,
     1,

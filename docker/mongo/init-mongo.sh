@@ -4,8 +4,8 @@ set -e
 echo "Inicializando ZooTech MongoDB..."
 
 mongosh \
-  --username "$MONGODB_INITDB_ROOT_USERNAME" \
-  --password "$MONGODB_INITDB_ROOT_PASSWORD" \
+  --username "$MONGO_INITDB_ROOT_USERNAME" \
+  --password "$MONGO_INITDB_ROOT_PASSWORD" \
   --authenticationDatabase admin <<EOF
 
 // ============================================================
@@ -40,6 +40,20 @@ db.createCollection("$MONGODB_EVENT_LOGS_COLLECTION_NAME");
 // ============================================================
 
 db.createCollection("$MONGODB_ERROR_LOGS_COLLECTION_NAME");
+
+// ============================================================
+// TTL - Eliminación automática después de determinados segundos
+// ============================================================
+
+db.getCollection("$MONGODB_EVENT_LOGS_COLLECTION_NAME").createIndex(
+    { "$MONGODB_MODEL_FIELDNAME_WITH_TIMESTAMP_VALUE": 1 },
+    { expireAfterSeconds: $MONGODB_DELETE_LOGS_AFTER_SECONDS }
+);
+
+db.getCollection("$MONGODB_ERROR_LOGS_COLLECTION_NAME").createIndex(
+    { "$MONGODB_MODEL_FIELDNAME_WITH_TIMESTAMP_VALUE": 1 },
+    { expireAfterSeconds: $MONGODB_DELETE_LOGS_AFTER_SECONDS }
+);
 
 EOF
 
