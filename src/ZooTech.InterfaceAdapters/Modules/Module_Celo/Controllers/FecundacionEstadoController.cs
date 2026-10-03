@@ -15,7 +15,7 @@ using ApiErrorResponse = ZooTech.InterfaceAdapters.DTOs.Responses.ErrorResponse;
 namespace ZooTech.InterfaceAdapters.Modules.Module_Celo.Controllers;
 
 [ApiController]
-[Route("api/reproduccion/fecundacion/estado")]
+[Route("api/v1/reproduccion/fecundacion/estado")]
 [ApiExplorerSettings(GroupName = "celo - fecundacion_estado")]
 public sealed class FecundacionEstadoController : ControllerBase
 {
