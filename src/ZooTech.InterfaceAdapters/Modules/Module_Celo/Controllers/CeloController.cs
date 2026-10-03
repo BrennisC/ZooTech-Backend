@@ -19,6 +19,7 @@ using ZooTech.Application.Modules.Module_Celo.UseCases.UpdateCelo;
 using ZooTech.Application.Modules.Module_Celo.UseCases.DeleteCelo;
 using ZooTech.InterfaceAdapters.Filters;
 using Microsoft.AspNetCore.Authorization;
+using ZooTech.Application.Modules.Module_Celo.UseCases.GetHistorialCeloPorVacuno;
 
 namespace ZooTech.InterfaceAdapters.Modules.Module_Celo.Controllers;
 
@@ -168,9 +169,10 @@ public sealed class CeloController : ControllerBase
     [ProducesResponseType(typeof(GeneralResponseDTO<CeloHistorialPorVacunoResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetHistorialPorVacuno(string codigoVacuno, [FromQuery] long registroId, CancellationToken cancellationToken)
     {
-        var output = await _getHistorialCeloPorVacunoBehaviorPipelineFactory.Create().Execute(
-            new ZooTech.Application.Modules.Module_Celo.UseCases.GetHistorialCeloPorVacuno.GetHistorialCeloPorVacunoCommand(codigoVacuno, registroId),
-            cancellationToken);
+        var output = await _behaviorDispatcher.Send<GetHistorialCeloPorVacunoCommand , GetHistorialCeloPorVacunoOutput>(
+            new GetHistorialCeloPorVacunoCommand(codigoVacuno, registroId)
+        );
+        
         return Ok(GeneralResponseDTO<CeloHistorialPorVacunoResponse>.Ok(CeloMapper.ToResponse(output)));
     }
 
