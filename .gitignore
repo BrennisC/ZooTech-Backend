@@ -89,7 +89,6 @@ appsettings.Development.json
 secrets.json
 # Local environment variables
 .env
-.env.*
 
 # =========================
 # Publish profiles
