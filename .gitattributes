@@ -1,0 +1,2 @@
+# Forzar a que Git guarde y maneje los archivos .sh con saltos de línea LF en lugar de CRLF
+*.sh text eol=lf
