@@ -5,13 +5,11 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using ZooTech.Application.Common.Behaviors;
-using ZooTech.Application.Common.Behaviors.Module_Vacuno.ListarVacunos;
 using ZooTech.Application.Common.Models;
 using ZooTech.Application.Modules.Module_ProduccionLeche.UseCases.Ordenios.Common;
 using ZooTech.Application.Modules.Module_ProduccionLeche.UseCases.Ordenios.CreateOrdenio;
 using ZooTech.Application.Modules.Module_ProduccionLeche.UseCases.Ordenios.DeleteOrdenio;
 using ZooTech.Application.Modules.Module_ProduccionLeche.UseCases.Ordenios.GenerateOrdeniosExcel;
-using ZooTech.Application.Modules.Module_ProduccionLeche.UseCases.Ordenios.GenerateOrdeniosPdf;
 using ZooTech.Application.Modules.Module_ProduccionLeche.UseCases.Ordenios.GetOrdenioById;
 using ZooTech.Application.Modules.Module_ProduccionLeche.UseCases.Ordenios.ListOrdenios;
 using ZooTech.Application.Modules.Module_ProduccionLeche.UseCases.Ordenios.UpdateOrdenio;
@@ -171,28 +169,108 @@ public class ProduccionLecheControllerIntegrationTests
 
     private static HttpClient CreateClient(OrdenioPipelineSpy spy)
     {
-        var server = new TestServer(new WebHostBuilder()
-            .ConfigureServices(services =>
-            {
-                services.AddSingleton(spy);
-                services.AddSingleton<IListarVacunosBehaviorPipelineFactory, FakeListarVacunosBehaviorPipelineFactory>();
-                services.AddSingleton<ICreateOrdenioBehaviorPipelineFactory, FakeCreateOrdenioBehaviorPipelineFactory>();
-                services.AddSingleton<IGetOrdenioByIdBehaviorPipelineFactory, FakeGetOrdenioByIdBehaviorPipelineFactory>();
-                services.AddSingleton<IGenerateOrdeniosPdfBehaviorPipelineFactory, FakeGenerateOrdeniosPdfBehaviorPipelineFactory>();
-                services.AddSingleton<IGenerateOrdeniosExcelBehaviorPipelineFactory, FakeGenerateOrdeniosExcelBehaviorPipelineFactory>();
-                services.AddSingleton<IListOrdeniosBehaviorPipelineFactory, FakeListOrdeniosBehaviorPipelineFactory>();
-                services.AddSingleton<IUpdateOrdenioBehaviorPipelineFactory, FakeUpdateOrdenioBehaviorPipelineFactory>();
-                services.AddSingleton<IDeleteOrdenioBehaviorPipelineFactory, FakeDeleteOrdenioBehaviorPipelineFactory>();
+        var dispatcher = new TestBehaviorDispatcher();
 
-                services
-                    .AddControllers()
-                    .AddApplicationPart(typeof(ProduccionLecheController).Assembly);
-            })
-            .Configure(app =>
+        dispatcher.Setup<CreateOrdenioCommand, CreateOrdenioOutput>(
+            (command, _) =>
             {
-                app.UseRouting();
-                app.UseEndpoints(endpoints => endpoints.MapControllers());
-            }));
+                spy.CreateCommand = command;
+
+                return Task.FromResult(
+                    new CreateOrdenioOutput(
+                        CreateOrdenioOutput(
+                            1,
+                            command.Codigo ?? string.Empty
+                        )
+                    )
+                );
+            });
+
+        dispatcher.Setup<GetOrdenioByIdQuery, GetOrdenioByIdOutput>(
+            (query, _) =>
+            {
+                spy.GetByIdCommand = query;
+
+                return Task.FromResult(
+                    new GetOrdenioByIdOutput(
+                        CreateOrdenioOutput(query.Id, "ORD-025")
+                    )
+                );
+            });
+
+        dispatcher.Setup<ListOrdeniosQuery, ListOrdeniosOutput>(
+            (query, _) =>
+            {
+                spy.ListQuery = query;
+
+                return Task.FromResult(
+                    new ListOrdeniosOutput(
+                        new[] { CreateOrdenioListOutput() },
+                        12
+                    )
+                );
+            });
+
+        dispatcher.Setup<UpdateOrdenioCommand, UpdateOrdenioOutput>(
+            (command, _) =>
+            {
+                spy.UpdateCommand = command;
+
+                return Task.FromResult(
+                    new UpdateOrdenioOutput(
+                        CreateOrdenioOutput(command.Id, "ORD-030")
+                    )
+                );
+            });
+
+        dispatcher.Setup<DeleteOrdenioCommand, EmptyOutput>(
+            (command, _) =>
+            {
+                spy.DeleteCommand = command;
+
+                return Task.FromResult(EmptyOutput.Value);
+            });
+
+        dispatcher.Setup<GenerateOrdeniosComparationExcelQuery, GenerateOrdeniosExcelOutput>(
+            (query, _) =>
+            {
+                spy.ExcelQuery = query;
+
+                return Task.FromResult(
+                    new GenerateOrdeniosExcelOutput(
+                        new byte[] { 1 },
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        "ordenios.xlsx"
+                    )
+                );
+            });
+
+        dispatcher.Setup<ListarVacunosQuery, ListarVacunosOutput>(
+            (_, _) =>
+                Task.FromResult(
+                    new ListarVacunosOutput(
+                        Array.Empty<VacunoListItem>(),
+                        0)));
+
+        var server = new TestServer(
+            new WebHostBuilder()
+                .ConfigureServices(services =>
+                {
+                    services.AddSingleton(spy);
+
+                    services.AddSingleton<IBehaviorDispatcher>(dispatcher);
+
+                    services
+                        .AddControllers()
+                        .AddApplicationPart(
+                            typeof(ProduccionLecheController).Assembly);
+                })
+                .Configure(app =>
+                {
+                    app.UseRouting();
+                    app.UseEndpoints(
+                        endpoints => endpoints.MapControllers());
+                }));
 
         return server.CreateClient();
     }
@@ -209,92 +287,34 @@ public class ProduccionLecheControllerIntegrationTests
         public GenerateOrdeniosComparationExcelQuery? ExcelQuery { get; set; }
     }
 
-    private sealed class FakeListarVacunosBehaviorPipelineFactory : IListarVacunosBehaviorPipelineFactory
+    private sealed class TestBehaviorDispatcher : IBehaviorDispatcher
     {
-        public BehaviorPipeline<ListarVacunosQuery, ListarVacunosOutput> Create()
-            => new(
-                Array.Empty<IBehavior<ListarVacunosQuery, ListarVacunosOutput>>(),
-                (_, _) => Task.FromResult(new ListarVacunosOutput(Array.Empty<VacunoListItem>(), 0)));
-    }
+        private readonly Dictionary<Type, Func<object, CancellationToken, Task<object>>>
+            _handlers = new();
 
-    private sealed class FakeCreateOrdenioBehaviorPipelineFactory(OrdenioPipelineSpy spy) : ICreateOrdenioBehaviorPipelineFactory
-    {
-        public BehaviorPipeline<CreateOrdenioCommand, CreateOrdenioOutput> Create()
-            => new(
-                Array.Empty<IBehavior<CreateOrdenioCommand, CreateOrdenioOutput>>(),
-                (command, _) =>
-                {
-                    spy.CreateCommand = command;
-                    return Task.FromResult(new CreateOrdenioOutput(CreateOrdenioOutput(1, command.Codigo ?? string.Empty)));
-                });
-    }
+        public void Setup<TRequest, TResponse>(
+            Func<TRequest, CancellationToken, Task<TResponse>> handler)
+        {
+            _handlers[typeof(TRequest)] = async (request, cancellationToken) =>
+                await handler((TRequest)request, cancellationToken);
+        }
 
-    private sealed class FakeGetOrdenioByIdBehaviorPipelineFactory(OrdenioPipelineSpy spy) : IGetOrdenioByIdBehaviorPipelineFactory
-    {
-        public BehaviorPipeline<GetOrdenioByIdQuery, GetOrdenioByIdOutput> Create()
-            => new(
-                Array.Empty<IBehavior<GetOrdenioByIdQuery, GetOrdenioByIdOutput>>(),
-                (command, _) =>
-                {
-                    spy.GetByIdCommand = command;
-                    return Task.FromResult(new GetOrdenioByIdOutput(CreateOrdenioOutput(command.Id, "ORD-025")));
-                });
-    }
+        public async Task<TResponse> Send<TRequest, TResponse>(
+            TRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            if (!_handlers.TryGetValue(
+                    typeof(TRequest),
+                    out var handler))
+            {
+                throw new InvalidOperationException(
+                    $"No test handler configured for {typeof(TRequest).Name}");
+            }
 
-    private sealed class FakeGenerateOrdeniosPdfBehaviorPipelineFactory : IGenerateOrdeniosPdfBehaviorPipelineFactory
-    {
-        public BehaviorPipeline<GenerateOrdeniosComparationPdfQuery, GenerateOrdeniosPdfOutput> Create()
-            => new(
-                Array.Empty<IBehavior<GenerateOrdeniosComparationPdfQuery, GenerateOrdeniosPdfOutput>>(),
-                (_, _) => Task.FromResult(new GenerateOrdeniosPdfOutput(new byte[] { 1 }, "application/pdf", "ordenios.pdf")));
-    }
+            var response = await handler(request, cancellationToken);
 
-    private sealed class FakeGenerateOrdeniosExcelBehaviorPipelineFactory(OrdenioPipelineSpy spy) : IGenerateOrdeniosExcelBehaviorPipelineFactory
-    {
-        public BehaviorPipeline<GenerateOrdeniosComparationExcelQuery, GenerateOrdeniosExcelOutput> Create()
-            => new(
-                Array.Empty<IBehavior<GenerateOrdeniosComparationExcelQuery, GenerateOrdeniosExcelOutput>>(),
-                (query, _) =>
-                {
-                    spy.ExcelQuery = query;
-                    return Task.FromResult(new GenerateOrdeniosExcelOutput(new byte[] { 1 }, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "ordenios.xlsx"));
-                });
-    }
-
-    private sealed class FakeListOrdeniosBehaviorPipelineFactory(OrdenioPipelineSpy spy) : IListOrdeniosBehaviorPipelineFactory
-    {
-        public BehaviorPipeline<ListOrdeniosQuery, ListOrdeniosOutput> Create()
-            => new(
-                Array.Empty<IBehavior<ListOrdeniosQuery, ListOrdeniosOutput>>(),
-                (query, _) =>
-                {
-                    spy.ListQuery = query;
-                    return Task.FromResult(new ListOrdeniosOutput(new[] { CreateOrdenioListOutput() }, 12));
-                });
-    }
-
-    private sealed class FakeUpdateOrdenioBehaviorPipelineFactory(OrdenioPipelineSpy spy) : IUpdateOrdenioBehaviorPipelineFactory
-    {
-        public BehaviorPipeline<UpdateOrdenioCommand, UpdateOrdenioOutput> Create()
-            => new(
-                Array.Empty<IBehavior<UpdateOrdenioCommand, UpdateOrdenioOutput>>(),
-                (command, _) =>
-                {
-                    spy.UpdateCommand = command;
-                    return Task.FromResult(new UpdateOrdenioOutput(CreateOrdenioOutput(command.Id, "ORD-030")));
-                });
-    }
-
-    private sealed class FakeDeleteOrdenioBehaviorPipelineFactory(OrdenioPipelineSpy spy) : IDeleteOrdenioBehaviorPipelineFactory
-    {
-        public BehaviorPipeline<DeleteOrdenioCommand, EmptyOutput> Create()
-            => new(
-                Array.Empty<IBehavior<DeleteOrdenioCommand, EmptyOutput>>(),
-                (command, _) =>
-                {
-                    spy.DeleteCommand = command;
-                    return Task.FromResult(EmptyOutput.Value);
-                });
+            return (TResponse)response;
+        }
     }
 
     private static OrdenioOutput CreateOrdenioOutput(long id, string codigo)

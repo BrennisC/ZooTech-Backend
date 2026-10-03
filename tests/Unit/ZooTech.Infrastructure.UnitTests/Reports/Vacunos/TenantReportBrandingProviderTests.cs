@@ -9,6 +9,7 @@ using ZooTech.Application.Common.Gateway.Context;
 using ZooTech.Infrastructure.Persistence.Context;
 using ZooTech.Infrastructure.Persistence.Entities.MainTenantsDb;
 using ZooTech.Infrastructure.Reports.Vacunos;
+using ZooTech.Infrastructure.Tenant;
 
 namespace ZooTech.Infrastructure.UnitTests.Reports.Vacunos;
 
@@ -148,8 +149,14 @@ public sealed class TenantReportBrandingProviderTests
             .Setup(factory => factory.CreateClient("TenantReportBranding"))
             .Returns(new HttpClient(handler, disposeHandler: false));
 
+        var tenantDbContextFactory = new Mock<ITenantDbContextFactory>();
+
+        tenantDbContextFactory
+            .Setup(mock => mock.CreateDbContextByTenantContext())
+            .Returns(db);
+
         return new TenantReportBrandingProvider(
-            db,
+            tenantDbContextFactory.Object,
             tenantContext,
             clientFactory.Object,
             cache,

@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
+using Moq;
 using ZooTech.Application.Common.Gateway.Tenant;
 using ZooTech.Domain.Admin.Enums;
 using ZooTech.Infrastructure.Persistence.Context;
@@ -20,13 +21,25 @@ namespace ZooTech.Infrastructure.UnitTests.Tenant
             return new TenantCatalogDb(options);
         }
 
+        private static ITenantDbContextFactory CreateTenantDbContextFactory(TenantCatalogDb db)
+        {
+            var tenantDbContextFactory = new Mock<ITenantDbContextFactory>();
+
+            tenantDbContextFactory
+                .Setup(factory => factory.CreateDbContextBySettingsValue())
+                .Returns(db);
+    
+            return tenantDbContextFactory.Object;
+        }
+
         [Fact]
         public async Task Should_Return_Null_When_Tenant_Not_Found()
         {
             // Arrange
             var db = CreateDbContext();
+            var tenantDbContextFactory = CreateTenantDbContextFactory(db);
             var cache = new MemoryCache(new MemoryCacheOptions());
-            var tenantStore = new TenantStore(db, cache);
+            var tenantStore = new TenantStore(tenantDbContextFactory, cache);
 
             // Act
             var result = await tenantStore.GetBySubDomainAsync("tenant1");
@@ -43,8 +56,10 @@ namespace ZooTech.Infrastructure.UnitTests.Tenant
             db.tenants.Add(TenantTestDataFactory.CreateTenantEntity(status: TenantStatus.INACTIVE.ToString()));
             await db.SaveChangesAsync();
 
+            var tenantDbContextFactory = CreateTenantDbContextFactory(db);
+            
             var cache = new MemoryCache(new MemoryCacheOptions());
-            var store = new TenantStore(db, cache);
+            var store = new TenantStore(tenantDbContextFactory, cache);
 
             // Act
             var result = await store.GetBySubDomainAsync("tenant1");
@@ -70,9 +85,11 @@ namespace ZooTech.Infrastructure.UnitTests.Tenant
                 Email = "tenant1@gmail.com"
             };
 
+            var tenantDbContextFactory = CreateTenantDbContextFactory(db);
+
             cache.Set("tenant:tenant1", tenant, TimeSpan.FromMinutes(5));
 
-            var store = new TenantStore(db, cache);
+            var store = new TenantStore(tenantDbContextFactory, cache);
 
             // Act
             var result = await store.GetBySubDomainAsync("tenant1");
@@ -90,8 +107,9 @@ namespace ZooTech.Infrastructure.UnitTests.Tenant
             db.tenants.Add(TenantTestDataFactory.CreateTenantEntity());
             await db.SaveChangesAsync();
 
+            var tenantDbContextFactory = CreateTenantDbContextFactory(db);
             var cache = new MemoryCache(new MemoryCacheOptions());
-            var store = new TenantStore(db, cache);
+            var store = new TenantStore(tenantDbContextFactory, cache);
 
             // Act
             await store.GetBySubDomainAsync("tenant1");
