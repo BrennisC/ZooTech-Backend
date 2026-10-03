@@ -1,13 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
 using ZooTech.Application.Common.Behaviors;
-using ZooTech.Application.Common.Behaviors.Module_ProduccionLeche.Ordenios.CreateOrdenio;
-using ZooTech.Application.Common.Behaviors.Module_ProduccionLeche.Ordenios.DeleteOrdenio;
-using ZooTech.Application.Common.Behaviors.Module_ProduccionLeche.Ordenios.GenerateOrdeniosExcel;
-using ZooTech.Application.Common.Behaviors.Module_ProduccionLeche.Ordenios.GenerateOrdeniosPdf;
-using ZooTech.Application.Common.Behaviors.Module_ProduccionLeche.Ordenios.GetOrdenioById;
-using ZooTech.Application.Common.Behaviors.Module_ProduccionLeche.Ordenios.ListOrdenios;
-using ZooTech.Application.Common.Behaviors.Module_ProduccionLeche.Ordenios.UpdateOrdenio;
-using ZooTech.Application.Common.Behaviors.Module_Vacuno.ListarVacunos;
 using ZooTech.Application.Common.Models;
 using ZooTech.Application.Modules.Module_ProduccionLeche.UseCases.Ordenios.Common;
 using ZooTech.Application.Modules.Module_ProduccionLeche.UseCases.Ordenios.CreateOrdenio;
@@ -30,7 +22,8 @@ public class ProduccionLecheControllerTests
     [Fact]
     public void Health_ReturnsOkResponse()
     {
-        var controller = CreateController();
+        var dispatcher = new TestBehaviorDispatcher();
+        var controller = CreateController(dispatcher);
 
         var result = controller.Health();
 
@@ -41,8 +34,20 @@ public class ProduccionLecheControllerTests
     [Fact]
     public async Task List_WhenPagingIsNull_UsesDefaultPagingAndReturnsOk()
     {
-        var listInputPort = new FakeListOrdeniosBehaviorPipelineFactory();
-        var controller = CreateController(listInputPort: listInputPort);
+        var dispatcher = new TestBehaviorDispatcher();
+        ListOrdeniosQuery? capturedQuery = null;
+
+        dispatcher.Setup<ListOrdeniosQuery, ListOrdeniosOutput>((query, _) =>
+        {
+            capturedQuery = query;
+
+            return Task.FromResult(
+                new ListOrdeniosOutput(
+                    new[] { CreateOrdenioListOutput() },
+                    TotalCount: 1));
+        });
+
+        var controller = CreateController(dispatcher);
 
         var result = await controller.List(
             vacunoId: 10,
@@ -54,11 +59,14 @@ public class ProduccionLecheControllerTests
             CancellationToken.None);
 
         var okResult = Assert.IsType<OkObjectResult>(result);
-        var response = AssertGeneralResponseData<ListOrdeniosResponse>(okResult.Value);
-        Assert.Equal(10, listInputPort.CapturedQuery?.VacunoId);
-        Assert.Equal("ACTIVO", listInputPort.CapturedQuery?.EstadoOrdenioCode);
-        Assert.Equal(1, listInputPort.CapturedQuery?.Page);
-        Assert.Equal(20, listInputPort.CapturedQuery?.PageSize);
+        var response =
+            AssertGeneralResponseData<ListOrdeniosResponse>(okResult.Value);
+
+        Assert.Equal(10, capturedQuery?.VacunoId);
+        Assert.Equal("ACTIVO", capturedQuery?.EstadoOrdenioCode);
+        Assert.Equal(1, capturedQuery?.Page);
+        Assert.Equal(20, capturedQuery?.PageSize);
+
         Assert.Single(response.Data);
         Assert.Equal(1, response.Pagination.Page);
         Assert.Equal(20, response.Pagination.Limit);
@@ -67,8 +75,19 @@ public class ProduccionLecheControllerTests
     [Fact]
     public async Task Create_MapsRequestToCommandAndReturnsCreated()
     {
-        var createInputPort = new FakeCreateOrdenioBehaviorPipelineFactory();
-        var controller = CreateController(createInputPort: createInputPort);
+        var dispatcher = new TestBehaviorDispatcher();
+        CreateOrdenioCommand? capturedCommand = null;
+
+        dispatcher.Setup<CreateOrdenioCommand, CreateOrdenioOutput>((command, _) =>
+        {
+            capturedCommand = command;
+
+            return Task.FromResult(
+                new CreateOrdenioOutput(CreateOrdenioOutput()));
+        });
+
+        var controller = CreateController(dispatcher);
+
         var request = new CreateOrdenioRequest(
             "ORD-001",
             new DateTime(2026, 7, 7, 10, 0, 0),
@@ -78,26 +97,57 @@ public class ProduccionLecheControllerTests
             "ACTIVO",
             "Sin observaciones");
 
-        var result = await controller.Create(request, CancellationToken.None);
+        var result = await controller.Create(
+            request,
+            CancellationToken.None);
 
         var createdResult = Assert.IsType<CreatedResult>(result);
-        var response = AssertGeneralResponseData<OrdenioResponse>(createdResult.Value);
-        Assert.Equal("/api/v1/produccion-leche/1", createdResult.Location);
-        Assert.Equal(request.Codigo, createInputPort.CapturedCommand?.Codigo);
-        Assert.Equal(request.FechaHora, createInputPort.CapturedCommand?.FechaHora);
-        Assert.Equal(request.VacunoId, createInputPort.CapturedCommand?.VacunoId);
-        Assert.Equal(request.EncargadoUsuarioId, createInputPort.CapturedCommand?.EncargadoUsuarioId);
-        Assert.Equal(request.Litros, createInputPort.CapturedCommand?.Litros);
-        Assert.Equal(request.EstadoOrdenioCode, createInputPort.CapturedCommand?.EstadoOrdenioCode);
-        Assert.Equal(request.Observaciones, createInputPort.CapturedCommand?.Observaciones);
+
+        var response =
+            AssertGeneralResponseData<OrdenioResponse>(createdResult.Value);
+
+        Assert.Equal(
+            "/api/v1/produccion-leche/1",
+            createdResult.Location);
+
+        Assert.Equal(request.Codigo, capturedCommand?.Codigo);
+        Assert.Equal(request.FechaHora, capturedCommand?.FechaHora);
+        Assert.Equal(request.VacunoId, capturedCommand?.VacunoId);
+        Assert.Equal(
+            request.EncargadoUsuarioId,
+            capturedCommand?.EncargadoUsuarioId);
+        Assert.Equal(request.Litros, capturedCommand?.Litros);
+        Assert.Equal(
+            request.EstadoOrdenioCode,
+            capturedCommand?.EstadoOrdenioCode);
+        Assert.Equal(
+            request.Observaciones,
+            capturedCommand?.Observaciones);
+
         Assert.Equal(1, response.Id);
     }
 
     [Fact]
     public async Task GenerateExcel_MapsComparativoQueryAndReturnsFile()
     {
-        var excelInputPort = new FakeGetOrdeniosExcelBehaviorPipelineFactory();
-        var controller = CreateController(getOrdeniosExcelInputPort: excelInputPort);
+        var dispatcher = new TestBehaviorDispatcher();
+        GenerateOrdeniosComparationExcelQuery? capturedQuery = null;
+
+        dispatcher.Setup<
+            GenerateOrdeniosComparationExcelQuery,
+            GenerateOrdeniosExcelOutput>((query, _) =>
+        {
+            capturedQuery = query;
+
+            return Task.FromResult(
+                new GenerateOrdeniosExcelOutput(
+                    new byte[] { 1 },
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    "ordenios.xlsx"));
+        });
+
+        var controller = CreateController(dispatcher);
+
         var fechaDesde = new DateTime(2026, 7, 1, 8, 0, 0);
         var fechaHasta = new DateTime(2026, 7, 2, 8, 0, 0);
 
@@ -110,33 +160,69 @@ public class ProduccionLecheControllerTests
             CancellationToken.None);
 
         var fileResult = Assert.IsType<FileContentResult>(result);
-        Assert.Equal("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileResult.ContentType);
-        Assert.Equal("ordenios.xlsx", fileResult.FileDownloadName);
-        Assert.Equal(10, excelInputPort.CapturedQuery?.VacunoId);
-        Assert.Equal("ACTIVO", excelInputPort.CapturedQuery?.EstadoOrdenioCode);
-        Assert.Equal(fechaDesde, excelInputPort.CapturedQuery?.FechaDesde);
-        Assert.Equal(fechaHasta, excelInputPort.CapturedQuery?.FechaHasta);
-        Assert.True(excelInputPort.CapturedQuery?.Comparativo);
+
+        Assert.Equal(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            fileResult.ContentType);
+
+        Assert.Equal(
+            "ordenios.xlsx",
+            fileResult.FileDownloadName);
+
+        Assert.Equal(10, capturedQuery?.VacunoId);
+        Assert.Equal(
+            "ACTIVO",
+            capturedQuery?.EstadoOrdenioCode);
+        Assert.Equal(
+            fechaDesde,
+            capturedQuery?.FechaDesde);
+        Assert.Equal(
+            fechaHasta,
+            capturedQuery?.FechaHasta);
+        Assert.True(capturedQuery?.Comparativo);
     }
 
     private static ProduccionLecheController CreateController(
-        IListarVacunosBehaviorPipelineFactory? listarVacunosInputPort = null,
-        ICreateOrdenioBehaviorPipelineFactory? createInputPort = null,
-        IGetOrdenioByIdBehaviorPipelineFactory? getByIdInputPort = null,
-        IGenerateOrdeniosPdfBehaviorPipelineFactory? getOrdeniosPdfInputPort = null,
-        IGenerateOrdeniosExcelBehaviorPipelineFactory? getOrdeniosExcelInputPort = null,
-        IListOrdeniosBehaviorPipelineFactory? listInputPort = null,
-        IUpdateOrdenioBehaviorPipelineFactory? updateInputPort = null,
-        IDeleteOrdenioBehaviorPipelineFactory? deleteInputPort = null)
-        => new(
-            listarVacunosInputPort ?? new FakeListarVacunosBehaviorPipelineFactory(),
-            createInputPort ?? new FakeCreateOrdenioBehaviorPipelineFactory(),
-            getByIdInputPort ?? new FakeGetOrdenioByIdBehaviorPipelineFactory(),
-            getOrdeniosPdfInputPort ?? new FakeGetOrdeniosPdfBehaviorPipelineFactory(),
-            getOrdeniosExcelInputPort ?? new FakeGetOrdeniosExcelBehaviorPipelineFactory(),
-            listInputPort ?? new FakeListOrdeniosBehaviorPipelineFactory(),
-            updateInputPort ?? new FakeUpdateOrdenioBehaviorPipelineFactory(),
-            deleteInputPort ?? new FakeDeleteOrdenioBehaviorPipelineFactory());
+        TestBehaviorDispatcher dispatcher)
+        => new(dispatcher);
+
+    private sealed class TestBehaviorDispatcher : IBehaviorDispatcher
+    {
+        private readonly Dictionary<
+            (Type Request, Type Response),
+            Func<object, CancellationToken, Task<object>>> _handlers = new();
+
+        public void Setup<TRequest, TResponse>(
+            Func<TRequest, CancellationToken, Task<TResponse>> handler)
+        {
+            _handlers[(typeof(TRequest), typeof(TResponse))] =
+                async (request, cancellationToken) =>
+                    await handler(
+                        (TRequest)request,
+                        cancellationToken);
+        }
+
+        public async Task<TResponse> Send<TRequest, TResponse>(
+            TRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            if (!_handlers.TryGetValue(
+                    (typeof(TRequest), typeof(TResponse)),
+                    out var handler))
+            {
+                throw new InvalidOperationException(
+                    $"No test handler configured for " +
+                    $"{typeof(TRequest).Name} -> " +
+                    $"{typeof(TResponse).Name}");
+            }
+
+            var response = await handler(
+                request!,
+                cancellationToken);
+
+            return (TResponse)response;
+        }
+    }
 
     private static T AssertGeneralResponseData<T>(object? value)
     {
@@ -185,87 +271,5 @@ public class ProduccionLecheControllerTests
             "Sin observaciones",
             now,
             now);
-    }
-
-    private sealed class FakeListarVacunosBehaviorPipelineFactory : IListarVacunosBehaviorPipelineFactory
-    {
-        public BehaviorPipeline<ListarVacunosQuery, ListarVacunosOutput> Create()
-            => new(
-                Array.Empty<IBehavior<ListarVacunosQuery, ListarVacunosOutput>>(),
-                (_, _) => Task.FromResult(new ListarVacunosOutput(Array.Empty<VacunoListItem>(), TotalCount: 0)));
-    }
-
-    private sealed class FakeCreateOrdenioBehaviorPipelineFactory : ICreateOrdenioBehaviorPipelineFactory
-    {
-        public CreateOrdenioCommand? CapturedCommand { get; private set; }
-
-        public BehaviorPipeline<CreateOrdenioCommand, CreateOrdenioOutput> Create()
-            => new(
-                Array.Empty<IBehavior<CreateOrdenioCommand, CreateOrdenioOutput>>(),
-                (command, _) =>
-                {
-                    CapturedCommand = command;
-                    return Task.FromResult(new CreateOrdenioOutput(CreateOrdenioOutput()));
-                });
-    }
-
-    private sealed class FakeGetOrdenioByIdBehaviorPipelineFactory : IGetOrdenioByIdBehaviorPipelineFactory
-    {
-        public BehaviorPipeline<GetOrdenioByIdQuery, GetOrdenioByIdOutput> Create()
-            => new(
-                Array.Empty<IBehavior<GetOrdenioByIdQuery, GetOrdenioByIdOutput>>(),
-                (_, _) => Task.FromResult(new GetOrdenioByIdOutput(CreateOrdenioOutput())));
-    }
-
-    private sealed class FakeGetOrdeniosPdfBehaviorPipelineFactory : IGenerateOrdeniosPdfBehaviorPipelineFactory
-    {
-        public BehaviorPipeline<GenerateOrdeniosComparationPdfQuery, GenerateOrdeniosPdfOutput> Create()
-            => new(
-                Array.Empty<IBehavior<GenerateOrdeniosComparationPdfQuery, GenerateOrdeniosPdfOutput>>(),
-                (_, _) => Task.FromResult(new GenerateOrdeniosPdfOutput(new byte[] { 1 }, "application/pdf", "ordenios.pdf")));
-    }
-
-    private sealed class FakeGetOrdeniosExcelBehaviorPipelineFactory : IGenerateOrdeniosExcelBehaviorPipelineFactory
-    {
-        public GenerateOrdeniosComparationExcelQuery? CapturedQuery { get; private set; }
-
-        public BehaviorPipeline<GenerateOrdeniosComparationExcelQuery, GenerateOrdeniosExcelOutput> Create()
-            => new(
-                Array.Empty<IBehavior<GenerateOrdeniosComparationExcelQuery, GenerateOrdeniosExcelOutput>>(),
-                (query, _) =>
-                {
-                    CapturedQuery = query;
-                    return Task.FromResult(new GenerateOrdeniosExcelOutput(new byte[] { 1 }, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "ordenios.xlsx"));
-                });
-    }
-
-    private sealed class FakeListOrdeniosBehaviorPipelineFactory : IListOrdeniosBehaviorPipelineFactory
-    {
-        public ListOrdeniosQuery? CapturedQuery { get; private set; }
-
-        public BehaviorPipeline<ListOrdeniosQuery, ListOrdeniosOutput> Create()
-            => new(
-                Array.Empty<IBehavior<ListOrdeniosQuery, ListOrdeniosOutput>>(),
-                (query, _) =>
-                {
-                    CapturedQuery = query;
-                    return Task.FromResult(new ListOrdeniosOutput(new[] { CreateOrdenioListOutput() }, TotalCount: 1));
-                });
-    }
-
-    private sealed class FakeUpdateOrdenioBehaviorPipelineFactory : IUpdateOrdenioBehaviorPipelineFactory
-    {
-        public BehaviorPipeline<UpdateOrdenioCommand, UpdateOrdenioOutput> Create()
-            => new(
-                Array.Empty<IBehavior<UpdateOrdenioCommand, UpdateOrdenioOutput>>(),
-                (_, _) => Task.FromResult(new UpdateOrdenioOutput(CreateOrdenioOutput())));
-    }
-
-    private sealed class FakeDeleteOrdenioBehaviorPipelineFactory : IDeleteOrdenioBehaviorPipelineFactory
-    {
-        public BehaviorPipeline<DeleteOrdenioCommand, EmptyOutput> Create()
-            => new(
-                Array.Empty<IBehavior<DeleteOrdenioCommand, EmptyOutput>>(),
-                (_, _) => Task.FromResult(EmptyOutput.Value));
     }
 }

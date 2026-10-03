@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
+
 using ZooTech.Application.Common.Behaviors;
 using ZooTech.Application.Common.Models;
+
 using ZooTech.Application.Modules.Module_Sanidad.UseCases.Common;
 using ZooTech.Application.Modules.Module_Sanidad.UseCases.CreateTriaje;
 using ZooTech.Application.Modules.Module_Sanidad.UseCases.DeleteTriaje;
@@ -13,6 +15,7 @@ using ZooTech.Application.Modules.Module_Sanidad.UseCases.GetHistorialByVacunoId
 using ZooTech.Application.Modules.Module_Sanidad.UseCases.GetHistorialGeneral;
 using ZooTech.Application.Modules.Module_Sanidad.UseCases.GetTriajeById;
 using ZooTech.Application.Modules.Module_Sanidad.UseCases.UpdateTriaje;
+
 using ZooTech.InterfaceAdapters.DTOs;
 using ZooTech.InterfaceAdapters.Module_Sanidad.Controllers;
 using ZooTech.InterfaceAdapters.Modules.Module_Sanidad.DTOs.Requests;
@@ -28,16 +31,38 @@ public class TriajeControllerTests
     public async Task GetAll_MapsQueryParamsAndReturnsOk()
     {
         GetAllTriajesQuery? captured = null;
-        var controller = CreateController(getAllFactory: new GetAllFactory(query =>
+
+        var dispatcher = new TestBehaviorDispatcher();
+
+        dispatcher.Setup<GetAllTriajesQuery, GetAllTriajesOutput>((query, _) =>
         {
             captured = query;
-            return Task.FromResult(new GetAllTriajesOutput(new[] { CreateTriajeOutput() }, 1));
-        }));
 
-        var result = await controller.GetAll(0, 200, "2026-07-22", "2026-07-01", "2026-07-31", "TRI", "Luna", "CONTROL", "120", 5, true);
+            return Task.FromResult(
+                new GetAllTriajesOutput(
+                    new[] { CreateTriajeOutput() },
+                    1));
+        });
+
+        var controller = CreateController(dispatcher);
+
+        var result = await controller.GetAll(
+            0,
+            200,
+            "2026-07-22",
+            "2026-07-01",
+            "2026-07-31",
+            "TRI",
+            "Luna",
+            "CONTROL",
+            "120",
+            5,
+            true);
 
         var okResult = Assert.IsType<OkObjectResult>(result);
-        var response = AssertGeneralResponseData<PagedTriajeResponse>(okResult.Value);
+        var response =
+            AssertGeneralResponseData<PagedTriajeResponse>(okResult.Value);
+
         Assert.NotNull(captured);
         Assert.Equal(0, captured.Pagina);
         Assert.Equal(200, captured.Tamano);
@@ -58,25 +83,63 @@ public class TriajeControllerTests
     public async Task Create_MapsRequestAndReturnsCreatedAtAction()
     {
         CreateTriajeCommand? captured = null;
-        var controller = CreateController(createFactory: new CreateFactory(command =>
+
+        var dispatcher = new TestBehaviorDispatcher();
+
+        dispatcher.Setup<CreateTriajeCommand, CreateTriajeOutput>((command, _) =>
         {
             captured = command;
-            return Task.FromResult(new CreateTriajeOutput(9, "TRI009", Now, command.VacunoId, command.TipoPesoCode!, command.PesoKg, command.Observaciones, "ACTIVO", command.EncargadoUsuarioId, Now));
-        }));
-        var request = new TriajeRequest(5, "CONTROL", 120m, "Obs", 10, Now.AddDays(-1));
+
+            return Task.FromResult(
+                new CreateTriajeOutput(
+                    9,
+                    "TRI009",
+                    Now,
+                    command.VacunoId,
+                    command.TipoPesoCode!,
+                    command.PesoKg,
+                    command.Observaciones,
+                    "ACTIVO",
+                    command.EncargadoUsuarioId,
+                    Now));
+        });
+
+        var controller = CreateController(dispatcher);
+
+        var request = new TriajeRequest(
+            5,
+            "CONTROL",
+            120m,
+            "Obs",
+            10,
+            Now.AddDays(-1));
 
         var result = await controller.Create(request);
 
-        var createdResult = Assert.IsType<CreatedAtActionResult>(result);
-        var response = AssertGeneralResponseData<TriajeResponse>(createdResult.Value);
-        Assert.Equal(nameof(TriajeController.GetById), createdResult.ActionName);
-        Assert.Equal(9L, createdResult.RouteValues?["id"]);
+        var createdResult =
+            Assert.IsType<CreatedAtActionResult>(result);
+
+        var response =
+            AssertGeneralResponseData<TriajeResponse>(
+                createdResult.Value);
+
+        Assert.Equal(
+            nameof(TriajeController.GetById),
+            createdResult.ActionName);
+
+        Assert.Equal(
+            9L,
+            createdResult.RouteValues?["id"]);
+
         Assert.Equal(5, captured?.VacunoId);
         Assert.Equal("CONTROL", captured?.TipoPesoCode);
         Assert.Equal(120m, captured?.PesoKg);
         Assert.Equal("Obs", captured?.Observaciones);
         Assert.Equal(10, captured?.EncargadoUsuarioId);
-        Assert.Equal(Now.AddDays(-1), captured?.FechaHora);
+        Assert.Equal(
+            Now.AddDays(-1),
+            captured?.FechaHora);
+
         Assert.Equal(9, response.Id);
     }
 
@@ -84,34 +147,73 @@ public class TriajeControllerTests
     public async Task Delete_MapsRequestAndReturnsNoContent()
     {
         DeleteTriajeCommand? captured = null;
-        var controller = CreateController(deleteFactory: new DeleteFactory(command =>
+
+        var dispatcher = new TestBehaviorDispatcher();
+
+        dispatcher.Setup<DeleteTriajeCommand, EmptyOutput>((command, _) =>
         {
             captured = command;
-            return Task.FromResult(EmptyOutput.Value);
-        }));
 
-        var result = await controller.Delete(8, new DeleteTriajeRequest("Duplicado"));
+            return Task.FromResult(EmptyOutput.Value);
+        });
+
+        var controller = CreateController(dispatcher);
+
+        var result = await controller.Delete(
+            8,
+            new DeleteTriajeRequest("Duplicado"));
 
         Assert.IsType<NoContentResult>(result);
         Assert.Equal(8, captured?.Id);
-        Assert.Equal("Duplicado", captured?.MotivoEliminacion);
+        Assert.Equal(
+            "Duplicado",
+            captured?.MotivoEliminacion);
     }
 
     [Fact]
     public async Task GeneratePdf_MapsFiltersAndReturnsFile()
     {
         GenerateTriajesPdfQuery? captured = null;
-        var controller = CreateController(pdfFactory: new PdfFactory(query =>
+
+        var dispatcher = new TestBehaviorDispatcher();
+
+        dispatcher.Setup<
+            GenerateTriajesPdfQuery,
+            GenerateTriajesPdfOutput>((query, _) =>
         {
             captured = query;
-            return Task.FromResult(new GenerateTriajesPdfOutput(new byte[] { 1 }, "application/pdf", "triajes.pdf"));
-        }));
 
-        var result = await controller.GeneratePdf("2026-07-22", "2026-07-01", "2026-07-31", "TRI", "Luna", "CONTROL", "120", 5, CancellationToken.None);
+            return Task.FromResult(
+                new GenerateTriajesPdfOutput(
+                    new byte[] { 1 },
+                    "application/pdf",
+                    "triajes.pdf"));
+        });
 
-        var fileResult = Assert.IsType<FileContentResult>(result);
-        Assert.Equal("application/pdf", fileResult.ContentType);
-        Assert.Equal("triajes.pdf", fileResult.FileDownloadName);
+        var controller = CreateController(dispatcher);
+
+        var result = await controller.GeneratePdf(
+            "2026-07-22",
+            "2026-07-01",
+            "2026-07-31",
+            "TRI",
+            "Luna",
+            "CONTROL",
+            "120",
+            5,
+            CancellationToken.None);
+
+        var fileResult =
+            Assert.IsType<FileContentResult>(result);
+
+        Assert.Equal(
+            "application/pdf",
+            fileResult.ContentType);
+
+        Assert.Equal(
+            "triajes.pdf",
+            fileResult.FileDownloadName);
+
         Assert.Equal("TRI", captured?.Codigo);
         Assert.Equal("Luna", captured?.Nombre);
         Assert.Equal(5, captured?.VacunoId);
@@ -121,61 +223,159 @@ public class TriajeControllerTests
     public async Task GenerateExcel_MapsFiltersAndReturnsFile()
     {
         GenerateTriajesExcelQuery? captured = null;
-        var controller = CreateController(excelFactory: new ExcelFactory(query =>
+
+        var dispatcher = new TestBehaviorDispatcher();
+
+        dispatcher.Setup<
+            GenerateTriajesExcelQuery,
+            GenerateTriajesExcelOutput>((query, _) =>
         {
             captured = query;
-            return Task.FromResult(new GenerateTriajesExcelOutput(new byte[] { 1 }, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "triajes.xlsx"));
-        }));
 
-        var result = await controller.GenerateExcel("2026-07-22", "2026-07-01", "2026-07-31", "TRI", "Luna", "CONTROL", "120", 5, CancellationToken.None);
+            return Task.FromResult(
+                new GenerateTriajesExcelOutput(
+                    new byte[] { 1 },
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    "triajes.xlsx"));
+        });
 
-        var fileResult = Assert.IsType<FileContentResult>(result);
-        Assert.Equal("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileResult.ContentType);
-        Assert.Equal("triajes.xlsx", fileResult.FileDownloadName);
-        Assert.Equal("CONTROL", captured?.TipoPeso);
-        Assert.Equal("120", captured?.PesoKg);
+        var controller = CreateController(dispatcher);
+
+        var result = await controller.GenerateExcel(
+            "2026-07-22",
+            "2026-07-01",
+            "2026-07-31",
+            "TRI",
+            "Luna",
+            "CONTROL",
+            "120",
+            5,
+            CancellationToken.None);
+
+        var fileResult =
+            Assert.IsType<FileContentResult>(result);
+
+        Assert.Equal(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            fileResult.ContentType);
+
+        Assert.Equal(
+            "triajes.xlsx",
+            fileResult.FileDownloadName);
+
+        Assert.Equal(
+            "CONTROL",
+            captured?.TipoPeso);
+
+        Assert.Equal(
+            "120",
+            captured?.PesoKg);
     }
 
     [Fact]
     public async Task GetHistorial_MapsVacunoIdDatesAndReturnsOk()
     {
         GetHistorialByVacunoIdQuery? captured = null;
-        var controller = CreateController(historialFactory: new HistorialFactory(command =>
-        {
-            captured = command;
-            return Task.FromResult(new GetHistorialByVacunoIdOutput(new[] { new HistorialTriajeItemOutput(1, Now, "CONTROL", 120m) }));
-        }));
 
-        var result = await controller.GetHistorial(5, "2026-07-01", "2026-07-31");
+        var dispatcher = new TestBehaviorDispatcher();
+
+        dispatcher.Setup<
+            GetHistorialByVacunoIdQuery,
+            GetHistorialByVacunoIdOutput>((query, _) =>
+        {
+            captured = query;
+
+            return Task.FromResult(
+                new GetHistorialByVacunoIdOutput(
+                    new[]
+                    {
+                        new HistorialTriajeItemOutput(
+                            1,
+                            Now,
+                            "CONTROL",
+                            120m)
+                    }));
+        });
+
+        var controller = CreateController(dispatcher);
+
+        var result = await controller.GetHistorial(
+            5,
+            "2026-07-01",
+            "2026-07-31");
 
         Assert.IsType<OkObjectResult>(result);
+
         Assert.Equal(5, captured?.Vacunoid);
-        Assert.Equal("2026-07-01", captured?.FechaDesde);
-        Assert.Equal("2026-07-31", captured?.FechaHasta);
+        Assert.Equal(
+            "2026-07-01",
+            captured?.FechaDesde);
+
+        Assert.Equal(
+            "2026-07-31",
+            captured?.FechaHasta);
     }
 
     [Fact]
     public async Task GetHistorialGeneral_MapsDatesAndReturnsOk()
     {
         GetHistorialGeneralQuery? captured = null;
-        var controller = CreateController(historialGeneralFactory: new HistorialGeneralFactory(command =>
-        {
-            captured = command;
-            return Task.FromResult(new GetHistorialGeneralOutput(new[] { new HistorialTriajeItemOutput(1, Now, "CONTROL", 120m) }));
-        }));
 
-        var result = await controller.GetHistorialGeneral("2026-07-01", "2026-07-31");
+        var dispatcher = new TestBehaviorDispatcher();
+
+        dispatcher.Setup<
+            GetHistorialGeneralQuery,
+            GetHistorialGeneralOutput>((query, _) =>
+        {
+            captured = query;
+
+            return Task.FromResult(
+                new GetHistorialGeneralOutput(
+                    new[]
+                    {
+                        new HistorialTriajeItemOutput(
+                            1,
+                            Now,
+                            "CONTROL",
+                            120m)
+                    }));
+        });
+
+        var controller = CreateController(dispatcher);
+
+        var result = await controller.GetHistorialGeneral(
+            "2026-07-01",
+            "2026-07-31");
 
         Assert.IsType<OkObjectResult>(result);
-        Assert.Equal("2026-07-01", captured?.FechaDesde);
-        Assert.Equal("2026-07-31", captured?.FechaHasta);
+
+        Assert.Equal(
+            "2026-07-01",
+            captured?.FechaDesde);
+
+        Assert.Equal(
+            "2026-07-31",
+            captured?.FechaHasta);
     }
 
     [Fact]
     public async Task GetTiposPeso_ReturnsOk()
     {
-        var controller = CreateController(tipoPesoFactory: new TipoPesoFactory(_ =>
-            Task.FromResult(new GetAllTipoPesosOutput(new[] { new TipoPesoItemOutput("CONTROL", "Peso Control") }))));
+        var dispatcher = new TestBehaviorDispatcher();
+
+        dispatcher.Setup<
+            EmptyCommandQuery,
+            GetAllTipoPesosOutput>((_, _) =>
+            Task.FromResult(
+                new GetAllTipoPesosOutput(
+                    new[]
+                    {
+                        new TipoPesoItemOutput(
+                            "CONTROL",
+                            "Peso Control")
+                    })));
+
+        var controller = CreateController(dispatcher);
 
         var result = await controller.GetTiposPeso();
 
@@ -185,8 +385,22 @@ public class TriajeControllerTests
     [Fact]
     public async Task GetVacunos_ReturnsOk()
     {
-        var controller = CreateController(vacunosFactory: new VacunosFactory(_ =>
-            Task.FromResult(new GetAllVacunosSanidadOutput(new[] { new VacunoSanidadItemOutput(1, "VAC001", "Luna") }))));
+        var dispatcher = new TestBehaviorDispatcher();
+
+        dispatcher.Setup<
+            EmptyCommandQuery,
+            GetAllVacunosSanidadOutput>((_, _) =>
+            Task.FromResult(
+                new GetAllVacunosSanidadOutput(
+                    new[]
+                    {
+                        new VacunoSanidadItemOutput(
+                            1,
+                            "VAC001",
+                            "Luna")
+                    })));
+
+        var controller = CreateController(dispatcher);
 
         var result = await controller.GetVacunos();
 
@@ -194,95 +408,68 @@ public class TriajeControllerTests
     }
 
     private static TriajeController CreateController(
-        IGetAllTriajesBehaviorPipelineFactory? getAllFactory = null,
-        IGetTriajeByIdBehaviorPipelineFactory? getByIdFactory = null,
-        ICreateTriajeBehaviorPipelineFactory? createFactory = null,
-        IUpdateTriajeBehaviorPipelineFactory? updateFactory = null,
-        IDeleteTriajeBehaviorPipelineFactory? deleteFactory = null,
-        IGetAllTipoPesosBehaviorPipelineFactory? tipoPesoFactory = null,
-        IGetAllVacunosSanidadBehaviorPipelineFactory? vacunosFactory = null,
-        IGetHistorialByVacunoIdBehaviorPipelineFactory? historialFactory = null,
-        IGetHistorialGeneralBehaviorPipelineFactory? historialGeneralFactory = null,
-        IGenerateTriajesPdfBehaviorPipelineFactory? pdfFactory = null,
-        IGenerateTriajesExcelBehaviorPipelineFactory? excelFactory = null)
-        => new(
-            getAllFactory ?? new GetAllFactory(_ => Task.FromResult(new GetAllTriajesOutput(Array.Empty<TriajeOutput>(), 0))),
-            getByIdFactory ?? new GetByIdFactory(_ => Task.FromResult(new GetTriajeByIdOutput(1, "TRI001", Now, 1, "Luna", "CONTROL", 120m, null, "ACTIVO", 10, Now))),
-            createFactory ?? new CreateFactory(_ => Task.FromResult(new CreateTriajeOutput(1, "TRI001", Now, 1, "CONTROL", 120m, null, "ACTIVO", 10, Now))),
-            updateFactory ?? new UpdateFactory(_ => Task.FromResult(new UpdateTriajeOutput(1, "TRI001", Now, 1, "Luna", "CONTROL", 120m, null, "ACTIVO", 10, Now, Now))),
-            deleteFactory ?? new DeleteFactory(_ => Task.FromResult(EmptyOutput.Value)),
-            tipoPesoFactory ?? new TipoPesoFactory(_ => Task.FromResult(new GetAllTipoPesosOutput(Array.Empty<TipoPesoItemOutput>()))),
-            vacunosFactory ?? new VacunosFactory(_ => Task.FromResult(new GetAllVacunosSanidadOutput(Array.Empty<VacunoSanidadItemOutput>()))),
-            historialFactory ?? new HistorialFactory(_ => Task.FromResult(new GetHistorialByVacunoIdOutput(Array.Empty<HistorialTriajeItemOutput>()))),
-            historialGeneralFactory ?? new HistorialGeneralFactory(_ => Task.FromResult(new GetHistorialGeneralOutput(Array.Empty<HistorialTriajeItemOutput>()))),
-            pdfFactory ?? new PdfFactory(_ => Task.FromResult(new GenerateTriajesPdfOutput(Array.Empty<byte>(), "application/pdf", "triajes.pdf"))),
-            excelFactory ?? new ExcelFactory(_ => Task.FromResult(new GenerateTriajesExcelOutput(Array.Empty<byte>(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "triajes.xlsx"))));
-
-    private static BehaviorPipeline<TRequest, TResponse> Pipeline<TRequest, TResponse>(Func<TRequest, Task<TResponse>> handler)
-        => new(Array.Empty<IBehavior<TRequest, TResponse>>(), (request, _) => handler(request));
+        TestBehaviorDispatcher dispatcher)
+        => new(dispatcher);
 
     private static TriajeOutput CreateTriajeOutput()
-        => new(1, "TRI001", Now, 1, "Luna", "CONTROL", 120m, null, "ACTIVO", 10, Now);
+        => new(
+            1,
+            "TRI001",
+            Now,
+            1,
+            "Luna",
+            "CONTROL",
+            120m,
+            null,
+            "ACTIVO",
+            10,
+            Now);
 
     private static T AssertGeneralResponseData<T>(object? value)
     {
-        var response = Assert.IsType<GeneralResponseDTO<T>>(value);
+        var response =
+            Assert.IsType<GeneralResponseDTO<T>>(value);
+
         Assert.True(response.Success);
+
         return Assert.IsType<T>(response.Data);
     }
 
-    private sealed class GetAllFactory(Func<GetAllTriajesQuery, Task<GetAllTriajesOutput>> handler) : IGetAllTriajesBehaviorPipelineFactory
+    private sealed class TestBehaviorDispatcher : IBehaviorDispatcher
     {
-        public BehaviorPipeline<GetAllTriajesQuery, GetAllTriajesOutput> Create() => Pipeline(handler);
-    }
+        private readonly Dictionary<
+            (Type Request, Type Response),
+            Func<object, CancellationToken, Task<object>>> _handlers = new();
 
-    private sealed class GetByIdFactory(Func<GetTriajeByIdQuery, Task<GetTriajeByIdOutput>> handler) : IGetTriajeByIdBehaviorPipelineFactory
-    {
-        public BehaviorPipeline<GetTriajeByIdQuery, GetTriajeByIdOutput> Create() => Pipeline(handler);
-    }
+        public void Setup<TRequest, TResponse>(
+            Func<TRequest, CancellationToken, Task<TResponse>> handler)
+        {
+            _handlers[(typeof(TRequest), typeof(TResponse))] =
+                async (request, cancellationToken) =>
+                    await handler(
+                        (TRequest)request,
+                        cancellationToken);
+        }
 
-    private sealed class CreateFactory(Func<CreateTriajeCommand, Task<CreateTriajeOutput>> handler) : ICreateTriajeBehaviorPipelineFactory
-    {
-        public BehaviorPipeline<CreateTriajeCommand, CreateTriajeOutput> Create() => Pipeline(handler);
-    }
+        public async Task<TResponse> Send<TRequest, TResponse>(
+            TRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            if (!_handlers.TryGetValue(
+                    (typeof(TRequest), typeof(TResponse)),
+                    out var handler))
+            {
+                throw new InvalidOperationException(
+                    $"No test handler configured for " +
+                    $"{typeof(TRequest).Name} -> " +
+                    $"{typeof(TResponse).Name}");
+            }
 
-    private sealed class UpdateFactory(Func<UpdateTriajeCommand, Task<UpdateTriajeOutput>> handler) : IUpdateTriajeBehaviorPipelineFactory
-    {
-        public BehaviorPipeline<UpdateTriajeCommand, UpdateTriajeOutput> Create() => Pipeline(handler);
-    }
+            var response = await handler(
+                request!,
+                cancellationToken);
 
-    private sealed class DeleteFactory(Func<DeleteTriajeCommand, Task<EmptyOutput>> handler) : IDeleteTriajeBehaviorPipelineFactory
-    {
-        public BehaviorPipeline<DeleteTriajeCommand, EmptyOutput> Create() => Pipeline(handler);
-    }
-
-    private sealed class TipoPesoFactory(Func<EmptyCommandQuery, Task<GetAllTipoPesosOutput>> handler) : IGetAllTipoPesosBehaviorPipelineFactory
-    {
-        public BehaviorPipeline<EmptyCommandQuery, GetAllTipoPesosOutput> Create() => Pipeline(handler);
-    }
-
-    private sealed class VacunosFactory(Func<EmptyCommandQuery, Task<GetAllVacunosSanidadOutput>> handler) : IGetAllVacunosSanidadBehaviorPipelineFactory
-    {
-        public BehaviorPipeline<EmptyCommandQuery, GetAllVacunosSanidadOutput> Create() => Pipeline(handler);
-    }
-
-    private sealed class HistorialFactory(Func<GetHistorialByVacunoIdQuery, Task<GetHistorialByVacunoIdOutput>> handler) : IGetHistorialByVacunoIdBehaviorPipelineFactory
-    {
-        public BehaviorPipeline<GetHistorialByVacunoIdQuery, GetHistorialByVacunoIdOutput> Create() => Pipeline(handler);
-    }
-
-    private sealed class HistorialGeneralFactory(Func<GetHistorialGeneralQuery, Task<GetHistorialGeneralOutput>> handler) : IGetHistorialGeneralBehaviorPipelineFactory
-    {
-        public BehaviorPipeline<GetHistorialGeneralQuery, GetHistorialGeneralOutput> Create() => Pipeline(handler);
-    }
-
-    private sealed class PdfFactory(Func<GenerateTriajesPdfQuery, Task<GenerateTriajesPdfOutput>> handler) : IGenerateTriajesPdfBehaviorPipelineFactory
-    {
-        public BehaviorPipeline<GenerateTriajesPdfQuery, GenerateTriajesPdfOutput> Create() => Pipeline(handler);
-    }
-
-    private sealed class ExcelFactory(Func<GenerateTriajesExcelQuery, Task<GenerateTriajesExcelOutput>> handler) : IGenerateTriajesExcelBehaviorPipelineFactory
-    {
-        public BehaviorPipeline<GenerateTriajesExcelQuery, GenerateTriajesExcelOutput> Create() => Pipeline(handler);
+            return (TResponse)response;
+        }
     }
 }
