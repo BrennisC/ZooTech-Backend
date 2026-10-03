@@ -1,0 +1,315 @@
+version: '1.0'
+
+# DONE: Crear SQL para DB Admin y Tenants
+# DONE: Integrar servicio sql-server y sql-init
+# DONE: Integrar servicio cache y mongodb
+# DONE: Validar la creacion de las BD
+# DONE: Probar la ejecucion de Backend y Frontend
+# DONE: Implementar SEED para poblar tenants
+
+# El compose se estructura de la siguiente forma
+# 1. zootech-app-backend      -> Su inicio depende de 
+#                                   - zootech-sql-seeder (Que termine el seed)
+#                                   - zootech-db-mongodb (Que inicie con exito)
+#                                   - zootech-cache-garnet (Que inicie con exito)
+# 2. zootech-db-sqlserver     -> Su inicio no depende de nadie.
+# 3- zootech-sql-init         -> Su inicio depende de:
+#                                   - zootech-db-sqlserver (Que este saludable)
+# 4. zootech-sql-seeder       -> Su inicio depende de:
+#                                   - zootech-sql-init (Que termine el Init de BD)
+# 5. zootech-cache-garnet     -> Su inicio no depende de nadie.
+# 6. zootech-db-mongodb       -> Su inicio no depende de nadie.
+
+services:
+  zootech-app-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    
+    container_name: zootech-app-backend
+    ports: 
+      - "16001:16001"
+    environment: 
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+
+      ConnectionStrings__TenantTemplate: ${CONNECTION_STRING_TENANT_TEMPLATE}
+      ConnectionStrings__AdminTenantTemplate: ${CONNECTION_STRING_ADMIN_TENANT_TEMPLATE}
+
+      Kestrel__Endpoints__Http__Url: ${BACKEND_URL:-http:*:16001}
+
+      MultiTenant__BaseDomain: ${MULTITENANT_BASE_DOMAIN:-zentrycorp.local}
+      MultiTenant__AdminSubDomain: ${MULTITENANT_ADMIN_SUB_DOMAIN:-admin}
+      MultiTenant__AdminDatabaseName: ${MULTITENANT_ADMIN_DATABASE_NAME:-ZooTech_Admin_Db}
+
+      MongoDB__ConnectionString: ${MONGODB_CONNECTION_STRING}
+      MongoDB__DatabaseName: ${MONGODB_DATABASE_NAME:-audit}
+      MongoDB__ErrorLogsCollectionName: ${MONGODB_ERROR_LOGS_COLLECTION_NAME:-application_error_logs}
+      MongoDB__EventLogsCollectionName: ${MONGODB_EVENT_LOGS_COLLECTION_NAME:-application_event_logs}
+
+      Auditing__MaxArrayItems: ${AUDITING_MAX_ARRAY_ITEMS:-20}
+      Auditing__MaxStringLength: ${AUDITING_MAX_STRING_LENGTH:-2000}
+      Auditing__MaxDepth: ${AUDITING_MAX_DEPTH:-4}
+
+      Garnet__ConnectionString: ${GARNET_CONNECTION_STRING}
+      Garnet__ExpirationTime: ${GARNET_EXPIRATION_TIME:-10:00}
+
+      Jwt__Issuer: ${JWT_ISSUER:-ZooTech}
+      Jwt__Audience: ${JWT_AUDIENCE:-ZooTech.Client}
+      Jwt__SecretKey: ${JWT_SECRET_KEY:-secret_key_super_personal_1234567_value_01}
+      Jwt__ExpirationMinutes: ${JWT_EXPIRATION_MINUTES:-60}
+    depends_on:
+      zootech-sql-seeder: 
+        condition: service_completed_successfully
+      zootech-db-mongodb:
+        condition: service_healthy
+      zootech-cache-garnet:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - zootech-backend-network
+
+  zootech-db-sqlserver:
+    image: mcr.microsoft.com/mssql/server:2025-latest
+    container_name: zootech-db-sqlserver
+    environment:
+      ACCEPT_EULA: "Y"
+
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
+
+      MSSQL_PID: Developer
+    ports:
+      - "1433"
+    volumes:
+      - zootech-volume-db-sqlserver-data:/var/opt/mssql
+    restart: unless-stopped
+    networks:
+      - zootech-backend-network
+
+  # ==========================================================================
+  # INICIALIZADOR SQL SERVER
+  # ==========================================================================
+  #
+  # Este contenedor:
+  #
+  #   1. Espera a que SQL Server esté disponible.
+  #   2. Ejecuta scripts para crear todos los usuarios
+  #      y bases de datos principales.
+  #   3. Termina.
+  #
+  # ZooTech API depende de su finalización.
+  # ==========================================================================
+  zootech-sql-init:
+    image: mcr.microsoft.com/mssql-tools:latest
+
+    container_name: zootech-sql-init
+
+    depends_on:
+      zootech-db-sqlserver:
+        condition: service_started
+
+    environment:
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
+
+      ZOOTECH_SQL_TENANTS_INIT_EXECUTE: ${ZOOTECH_SQL_TENANTS_INIT_EXECUTE:-false}
+
+      ZOOTECH_DB_USER: ${ZOOTECH_DB_USER:-zootech-db-user}
+      ZOOTECH_DB_USER_PASSWORD: ${ZOOTECH_DB_USER_PASSWORD}
+
+      MULTITENANT_ADMIN_DATABASE_NAME: ${MULTITENANT_ADMIN_DATABASE_NAME:-ZooTech_Admin_Db}
+      MULTITENANT_ADMIN_SUB_DOMAIN: ${MULTITENANT_ADMIN_SUB_DOMAIN:-admin}
+
+      ZOOTECH_ADMIN_TENANT_CODE: ${ZOOTECH_ADMIN_TENANT_CODE:-ADMIN}
+      ZOOTECH_ADMIN_TENANT_DISPLAY_NAME: ${ZOOTECH_ADMIN_TENANT_DISPLAY_NAME:-Admin}
+      ZOOTECH_ADMIN_TENANT_LEGAL_NAME: ${ZOOTECH_ADMIN_TENANT_LEGAL_NAME:-Admin S.A.C.}
+      ZOOTECH_ADMIN_TENANT_EMAIL: ${ZOOTECH_ADMIN_TENANT_EMAIL:-admin@zootech.com}
+      ZOOTECH_ADMIN_TENANT_TIMEZONE: ${ZOOTECH_ADMIN_TENANT_TIMEZONE:-America/Lima}
+      ZOOTECH_ADMIN_TENANT_STATUS: ${ZOOTECH_ADMIN_TENANT_STATUS:-ACTIVE}
+
+      ZOOTECH_TENANT_DB_NAME_1: ${ZOOTECH_TENANT_DB_NAME_1:-ZooTech_Test1_Db}
+      ZOOTECH_TENANT_DB_NAME_2: ${ZOOTECH_TENANT_DB_NAME_2:-ZooTech_Test2_Db}
+      ZOOTECH_TENANT_DB_NAME_3: ${ZOOTECH_TENANT_DB_NAME_3:-ZooTech_Test3_Db}
+
+      ZOOTECH_TENANT_1_ADDRESS_DEPARTAMENTO: ${ZOOTECH_TENANT_1_ADDRESS_DEPARTAMENTO:-Húanuco}
+      ZOOTECH_TENANT_1_ADDRESS_DEPARTAMENTO_CODE: ${ZOOTECH_TENANT_1_ADDRESS_DEPARTAMENTO_CODE:-10}
+      ZOOTECH_TENANT_1_ADDRESS_PROVINCIA: ${ZOOTECH_TENANT_1_ADDRESS_PROVINCIA:-Leoncio Prado}
+      ZOOTECH_TENANT_1_ADDRESS_PROVINCIA_CODE: ${ZOOTECH_TENANT_1_ADDRESS_PROVINCIA_CODE:-1006}
+      ZOOTECH_TENANT_1_ADDRESS_DISTRITO: ${ZOOTECH_TENANT_1_ADDRESS_DISTRITO:-Rupa-Rupa}
+      ZOOTECH_TENANT_1_ADDRESS_DISTRITO_CODE: ${ZOOTECH_TENANT_1_ADDRESS_DISTRITO_CODE:-100601}
+
+      ZOOTECH_TENANT_2_ADDRESS_DEPARTAMENTO: ${ZOOTECH_TENANT_2_ADDRESS_DEPARTAMENTO:-Tumbes}
+      ZOOTECH_TENANT_2_ADDRESS_DEPARTAMENTO_CODE: ${ZOOTECH_TENANT_2_ADDRESS_DEPARTAMENTO_CODE:-08}
+      ZOOTECH_TENANT_2_ADDRESS_PROVINCIA: ${ZOOTECH_TENANT_2_ADDRESS_PROVINCIA:-Tumbes}
+      ZOOTECH_TENANT_2_ADDRESS_PROVINCIA_CODE: ${ZOOTECH_TENANT_2_ADDRESS_PROVINCIA_CODE:-0802}
+      ZOOTECH_TENANT_2_ADDRESS_DISTRITO: ${ZOOTECH_TENANT_2_ADDRESS_DISTRITO:-Tumbes}
+      ZOOTECH_TENANT_2_ADDRESS_DISTRITO_CODE: ${ZOOTECH_TENANT_2_ADDRESS_DISTRITO_CODE:-080201}
+
+      ZOOTECH_TENANT_3_ADDRESS_DEPARTAMENTO: ${ZOOTECH_TENANT_3_ADDRESS_DEPARTAMENTO:-Lima}
+      ZOOTECH_TENANT_3_ADDRESS_DEPARTAMENTO_CODE: ${ZOOTECH_TENANT_3_ADDRESS_DEPARTAMENTO_CODE:-11}
+      ZOOTECH_TENANT_3_ADDRESS_PROVINCIA: ${ZOOTECH_TENANT_3_ADDRESS_PROVINCIA:-Barranca}
+      ZOOTECH_TENANT_3_ADDRESS_PROVINCIA_CODE: ${ZOOTECH_TENANT_3_ADDRESS_PROVINCIA_CODE:-1104}
+      ZOOTECH_TENANT_3_ADDRESS_DISTRITO: ${ZOOTECH_TENANT_3_ADDRESS_DISTRITO:-Paramonga}
+      ZOOTECH_TENANT_3_ADDRESS_DISTRITO_CODE: ${ZOOTECH_TENANT_3_ADDRESS_DISTRITO_CODE:-110403}
+
+
+      ZOOTECH_DB_SQLSERVER_CONTAINER_NAME: ${ZOOTECH_DB_SQLSERVER_CONTAINER_NAME}
+
+      APP_ADMIN_USER_TEST_PASSWORD_HASH: ${APP_ADMIN_USER_TEST_PASSWORD_HASH}
+    volumes:
+      - "./docker/sql:/scripts:ro"
+      - "./docker/scripts/sql-init-script.sh:/sql-init-script.sh:ro"
+
+    entrypoint: ["/bin/bash", "/sql-init-script.sh"]
+    networks:
+      - zootech-backend-network
+
+  # ==========================================================================
+  # DATA SEEDER
+  # ==========================================================================
+  #
+  # Este contenedor:
+  #
+  #   1. Espera a que sql-init haya terminado.
+  #   2. Se queda corriendo esperando instrucciones del usuario
+  #      para poblar las bases de datos.
+  # 
+  # ==========================================================================
+  zootech-sql-seeder:
+    build: 
+      context: "./tools/ZooTech.DataSeeder"
+      dockerfile: Dockerfile
+    
+    container_name: zootech-sql-seeder
+
+    environment:
+      ZOOTECH_SEEDER_INIT_AUTOMATICALLY: ${ZOOTECH_SEEDER_INIT_AUTOMATICALLY:-false}
+
+      ZOOTECH_DB_USER: ${ZOOTECH_DB_USER:-zootech-db-user}
+      ZOOTECH_DB_USER_PASSWORD: ${ZOOTECH_DB_USER_PASSWORD}
+
+      ZOOTECH_TENANT_DB_NAME_1: ${ZOOTECH_TENANT_DB_NAME_1:-ZooTech_Test1_DB}
+      ZOOTECH_TENANT_DB_NAME_2: ${ZOOTECH_TENANT_DB_NAME_2:-ZooTech_Test2_DB}
+      ZOOTECH_TENANT_DB_NAME_3: ${ZOOTECH_TENANT_DB_NAME_3:-ZooTech_Test3_DB}
+
+      # Valores Seeder para ZOOTECH_TENANT_DB_NAME_1
+      ZOOTECH_TENANT_1_USUARIOS_NUMBER: ${ZOOTECH_TENANT_1_USUARIOS_NUMBER:-2}
+      ZOOTECH_TENANT_1_GRANJAS_NUMBER: ${ZOOTECH_TENANT_1_GRANJAS_NUMBER:-3}
+      ZOOTECH_TENANT_1_VACUNOS_NUMBER: ${ZOOTECH_TENANT_1_VACUNOS_NUMBER:-100}
+      ZOOTECH_TENANT_1_DIAS_ORDENIO_NUMBER: ${ZOOTECH_TENANT_1_DIAS_ORDENIO_NUMBER:-30}
+      ZOOTECH_TENANT_1_SEED_NUMBER: ${ZOOTECH_TENANT_1_SEED_NUMBER:-10}
+      ZOOTECH_TENANT_1_ADDRESS_DEPARTAMENTO: ${ZOOTECH_TENANT_1_ADDRESS_DEPARTAMENTO:-Húanuco}
+      ZOOTECH_TENANT_1_ADDRESS_DEPARTAMENTO_CODE: ${ZOOTECH_TENANT_1_ADDRESS_DEPARTAMENTO_CODE:-10}
+      ZOOTECH_TENANT_1_ADDRESS_PROVINCIA: ${ZOOTECH_TENANT_1_ADDRESS_PROVINCIA:-Leoncio Prado}
+      ZOOTECH_TENANT_1_ADDRESS_PROVINCIA_CODE: ${ZOOTECH_TENANT_1_ADDRESS_PROVINCIA_CODE:-1006}
+      ZOOTECH_TENANT_1_ADDRESS_DISTRITO: ${ZOOTECH_TENANT_1_ADDRESS_DISTRITO:-Rupa-Rupa}
+      ZOOTECH_TENANT_1_ADDRESS_DISTRITO_CODE: ${ZOOTECH_TENANT_1_ADDRESS_DISTRITO_CODE:-100601}
+
+      # Para ZOOTECH_TENANT_DB_NAME_2
+      ZOOTECH_TENANT_2_USUARIOS_NUMBER: ${ZOOTECH_TENANT_2_USUARIOS_NUMBER:-3}
+      ZOOTECH_TENANT_2_GRANJAS_NUMBER: ${ZOOTECH_TENANT_2_GRANJAS_NUMBER:-2}
+      ZOOTECH_TENANT_2_VACUNOS_NUMBER: ${ZOOTECH_TENANT_2_VACUNOS_NUMBER:-100}
+      ZOOTECH_TENANT_2_DIAS_ORDENIO_NUMBER: ${ZOOTECH_TENANT_2_DIAS_ORDENIO_NUMBER:-30}
+      ZOOTECH_TENANT_2_SEED_NUMBER: ${ZOOTECH_TENANT_2_SEED_NUMBER:-20}
+      ZOOTECH_TENANT_2_ADDRESS_DEPARTAMENTO: ${ZOOTECH_TENANT_2_ADDRESS_DEPARTAMENTO:-Tumbes}
+      ZOOTECH_TENANT_2_ADDRESS_DEPARTAMENTO_CODE: ${ZOOTECH_TENANT_2_ADDRESS_DEPARTAMENTO_CODE:-08}
+      ZOOTECH_TENANT_2_ADDRESS_PROVINCIA: ${ZOOTECH_TENANT_2_ADDRESS_PROVINCIA:-Tumbes}
+      ZOOTECH_TENANT_2_ADDRESS_PROVINCIA_CODE: ${ZOOTECH_TENANT_2_ADDRESS_PROVINCIA_CODE:-0802}
+      ZOOTECH_TENANT_2_ADDRESS_DISTRITO: ${ZOOTECH_TENANT_2_ADDRESS_DISTRITO:-Tumbes}
+      ZOOTECH_TENANT_2_ADDRESS_DISTRITO_CODE: ${ZOOTECH_TENANT_2_ADDRESS_DISTRITO_CODE:-080201}
+
+      # Para ZOOTECH_TENANT_DB_NAME_3
+      ZOOTECH_TENANT_3_USUARIOS_NUMBER: ${ZOOTECH_TENANT_3_USUARIOS_NUMBER:-2}
+      ZOOTECH_TENANT_3_GRANJAS_NUMBER: ${ZOOTECH_TENANT_3_GRANJAS_NUMBER:-3}
+      ZOOTECH_TENANT_3_VACUNOS_NUMBER: ${ZOOTECH_TENANT_3_VACUNOS_NUMBER:-200}
+      ZOOTECH_TENANT_3_DIAS_ORDENIO_NUMBER: ${ZOOTECH_TENANT_3_DIAS_ORDENIO_NUMBER:-30}
+      ZOOTECH_TENANT_3_SEED_NUMBER: ${ZOOTECH_TENANT_3_SEED_NUMBER:-30}
+      ZOOTECH_TENANT_3_ADDRESS_DEPARTAMENTO: ${ZOOTECH_TENANT_3_ADDRESS_DEPARTAMENTO:-Lima}
+      ZOOTECH_TENANT_3_ADDRESS_DEPARTAMENTO_CODE: ${ZOOTECH_TENANT_3_ADDRESS_DEPARTAMENTO_CODE:-11}
+      ZOOTECH_TENANT_3_ADDRESS_PROVINCIA: ${ZOOTECH_TENANT_3_ADDRESS_PROVINCIA:-Barranca}
+      ZOOTECH_TENANT_3_ADDRESS_PROVINCIA_CODE: ${ZOOTECH_TENANT_3_ADDRESS_PROVINCIA_CODE:-1104}
+      ZOOTECH_TENANT_3_ADDRESS_DISTRITO: ${ZOOTECH_TENANT_3_ADDRESS_DISTRITO:-Paramonga}
+      ZOOTECH_TENANT_3_ADDRESS_DISTRITO_CODE: ${ZOOTECH_TENANT_3_ADDRESS_DISTRITO_CODE:-110403}
+
+      ZOOTECH_DB_SQLSERVER_CONTAINER_NAME: ${ZOOTECH_DB_SQLSERVER_CONTAINER_NAME}
+    depends_on:
+      zootech-sql-init: 
+        condition: service_completed_successfully
+
+    volumes:
+      - "./docker/scripts/sql-seeder-script.sh:/sql-seeder-script.sh:ro"
+
+    entrypoint: ["/bin/bash" , "/sql-seeder-script.sh"]
+
+    networks:
+      - zootech-backend-network
+
+  # ==========================================================================
+  # GARNET
+  # ==========================================================================
+
+  zootech-cache-garnet:
+    image: ghcr.io/microsoft/garnet:latest
+    container_name: zootech-cache-garnet
+    ports:
+      - "6379"
+    volumes:
+      - zootech-volume-cache-garnet-data:/data
+    restart: unless-stopped
+    networks:
+      - zootech-backend-network
+
+  # ==========================================================================
+  # MONGODB
+  # ==========================================================================
+
+  zootech-db-mongodb:
+    image: mongo:8
+    container_name: zootech-db-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGODB_INITDB_ROOT_USERNAME:-mongodb_root}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_INITDB_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGODB_INITDB_DATABASE:-base_db}
+
+      MONGODB_DATABASE_NAME: ${MONGODB_DATABASE_NAME:-audit}
+      MONGODB_EVENT_LOGS_COLLECTION_NAME: ${MONGODB_EVENT_LOGS_COLLECTION_NAME:-application_error_logs}
+      MONGODB_ERROR_LOGS_COLLECTION_NAME: ${MONGODB_ERROR_LOGS_COLLECTION_NAME:-application_event_logs}
+
+      MONGODB_APP_USER: ${MONGODB_APP_USER:-audit_user}
+      MONGODB_APP_PASSWORD: ${MONGODB_APP_PASSWORD}
+
+      MONGODB_DELETE_LOGS_AFTER_SECONDS: ${MONGODB_DELETE_LOGS_AFTER_SECONDS:-86400}
+      MONGODB_MODEL_FIELDNAME_WITH_TIMESTAMP_VALUE: ${MONGODB_MODEL_FIELDNAME_WITH_TIMESTAMP_VALUE:-timestamp}
+    ports:
+      - "27017"
+    volumes:
+      - zootech-volume-db-mongodb-data:/data/db
+      # Se ejecuta durante la inicialización del volumen.
+      - "./docker/mongo/init-mongo.sh:/docker-entrypoint-initdb.d/init-mongo.sh:ro"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mongosh",
+          "--quiet",
+          "--eval",
+          "db.adminCommand('ping').ok"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - zootech-backend-network
+
+networks:
+  zootech-backend-network:
+    driver: bridge
+    name: zootech-backend-network
+
+volumes:
+  zootech-volume-db-sqlserver-data:
+    name: zootech-volume-db-sqlserver-data
+  zootech-volume-db-mongodb-data:
+    name: zootech-volume-db-mongodb-data
+  zootech-volume-cache-garnet-data:
+    name: zootech-volume-cache-garnet-data
