@@ -70,11 +70,11 @@ builder.Services.AddCors(options =>
 
                 // Produccion: permite el dominio definido en variables de entorno y todos sus subdominios
                 var isZentryDomain =
-                    uri.Scheme == "http" || uri.Scheme == "https" &&
-                    (
-                        uri.Host == base_domain ||
-                        uri.Host.EndsWith($".{base_domain}")
-                    );
+                    (uri.Scheme == "http" || uri.Scheme == "https") &&
+    		    (
+        		uri.Host == base_domain ||
+        		uri.Host.EndsWith($".{base_domain}")
+      		    );
 
                 // Desarrollo local
                 var isLocalhost =
