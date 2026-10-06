@@ -31,11 +31,13 @@ services:
       - "16001:16001"
     environment: 
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      ASPNETCORE_URLS: ${ASPNETCORE_URLS:-http://+:16001}
+      ASPNETCORE_HTTP_PORTS: ${ASPNETCORE_HTTP_PORTS:-16001}
 
       ConnectionStrings__TenantTemplate: ${CONNECTION_STRING_TENANT_TEMPLATE}
       ConnectionStrings__AdminTenantTemplate: ${CONNECTION_STRING_ADMIN_TENANT_TEMPLATE}
 
-      Kestrel__Endpoints__Http__Url: ${BACKEND_URL:-http:*:16001}
+      Kestrel__Endpoints__Http__Url: ${BACKEND_URL:-http://*:16001}
 
       MultiTenant__BaseDomain: ${MULTITENANT_BASE_DOMAIN:-zentrycorp.local}
       MultiTenant__AdminSubDomain: ${MULTITENANT_ADMIN_SUB_DOMAIN:-admin}
