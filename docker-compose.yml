@@ -262,7 +262,7 @@ services:
   # ==========================================================================
 
   zootech-db-mongodb:
-    image: mongo:8
+    image: mongo:7.0
     container_name: zootech-db-mongodb
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGODB_INITDB_ROOT_USERNAME:-mongodb_root}
