@@ -18,6 +18,10 @@ on:
       - '.config/**'
 
   pull_request:
+    branches:
+      - main
+    types:
+      - closed
     paths:
       - 'src/**'
       - 'tests/**'
@@ -43,6 +47,12 @@ jobs:
 
   quality:
     name: Tests & SonarQube
+
+    if: >
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.head.ref == 'develop' &&
+      github.event.pull_request.base.ref == 'main'
+
     runs-on: self-hosted
     environment: production-env
     timeout-minutes: 30
@@ -85,7 +95,7 @@ jobs:
         run: |
           dotnet tool run dotnet-sonarscanner begin `
             /k:"com.zootech.backend" `
-            /n:"ZooTech - Backend" `
+            /n:"ZooTech Backend" `
             /d:sonar.host.url="$env:SONAR_HOST_URL" `
             /d:sonar.token="$env:SONAR_TOKEN" `
             /d:sonar.cs.opencover.reportsPaths="TestResults/**/coverage.opencover.xml"
