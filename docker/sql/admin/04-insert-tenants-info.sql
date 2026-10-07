@@ -40,9 +40,9 @@ FROM
 (
 VALUES
 
-('GANADERA_ALTO_HUALLAGA',N'altohuallaga',N'Ganadera Alto Huallaga',N'Ganadera Alto Huallaga S.A.C.',N'contacto@altohuallaga.com',N'+51 962 200 200',N'America/Lima',N'ACTIVE'),
-('AGROPECUARIA_MONZON',N'monzon',N'Agropecuaria Monzón',N'Agropecuaria Monzón S.R.L.',N'contacto@agromonzon.com',N'+51 962 300 300',N'America/Lima',N'ACTIVE'),
-('FUNDO_RIO_VERDE',N'rioverde',N'Fundo Río Verde',N'Fundo Río Verde S.A.C.',N'contacto@fundorioverde.com',N'+51 962 400 400',N'America/Lima',N'TRIAL')
+('GANADERA_ALTO_HUALLAGA',N'zootech-app-altohuallaga',N'Ganadera Alto Huallaga',N'Ganadera Alto Huallaga S.A.C.',N'contacto@altohuallaga.com',N'+51 962 200 200',N'America/Lima',N'ACTIVE'),
+('AGROPECUARIA_MONZON',N'zootech-app-agromonzon',N'Agropecuaria Monzón',N'Agropecuaria Monzón S.R.L.',N'contacto@agromonzon.com',N'+51 962 300 300',N'America/Lima',N'ACTIVE'),
+('FUNDO_RIO_VERDE',N'zootech-app-rioverde',N'Fundo Río Verde',N'Fundo Río Verde S.A.C.',N'contacto@fundorioverde.com',N'+51 962 400 400',N'America/Lima',N'TRIAL')
 
 ) V (Code, Subdomain, DisplayName, LegalName, Email, Phone, Timezone, Status)
 WHERE NOT EXISTS

@@ -7,17 +7,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using ZooTech.Application.Common.Behaviors;
-using ZooTech.Application.Common.Behaviors.Module_Sanidad.CreateTriaje;
-using ZooTech.Application.Common.Behaviors.Module_Sanidad.DeleteTriaje;
-using ZooTech.Application.Common.Behaviors.Module_Sanidad.GenerateTriajesExcel;
-using ZooTech.Application.Common.Behaviors.Module_Sanidad.GenerateTriajesPdf;
-using ZooTech.Application.Common.Behaviors.Module_Sanidad.GetAllTipoPesos;
-using ZooTech.Application.Common.Behaviors.Module_Sanidad.GetAllTriajes;
-using ZooTech.Application.Common.Behaviors.Module_Sanidad.GetAllVacunosSanidad;
-using ZooTech.Application.Common.Behaviors.Module_Sanidad.GetHistorialByVacunoId;
-using ZooTech.Application.Common.Behaviors.Module_Sanidad.GetHistorialGeneral;
-using ZooTech.Application.Common.Behaviors.Module_Sanidad.GetTriajeById;
-using ZooTech.Application.Common.Behaviors.Module_Sanidad.UpdateTriaje;
 using ZooTech.Application.Common.Gateway.Auditing;
 using ZooTech.Application.Common.Gateway.Context;
 using ZooTech.Application.Common.Gateway.Tenant;
@@ -71,6 +60,10 @@ public class TriajeApiIntegrationTests
 
                 builder.ConfigureTestServices(services =>
                 {
+                    // ============================================================
+                    // Infraestructura que no queremos ejecutar realmente
+                    // ============================================================
+
                     services.RemoveAll<IAppAuditService>();
                     services.AddSingleton<IAppAuditService, NoopAuditService>();
 
@@ -80,32 +73,281 @@ public class TriajeApiIntegrationTests
                     services.RemoveAll<ITenantContext>();
                     services.AddScoped<ITenantContext, TenantContext>();
 
-                    services.RemoveAll<IGetAllTriajesBehaviorPipelineFactory>();
-                    services.RemoveAll<IGetTriajeByIdBehaviorPipelineFactory>();
-                    services.RemoveAll<ICreateTriajeBehaviorPipelineFactory>();
-                    services.RemoveAll<IUpdateTriajeBehaviorPipelineFactory>();
-                    services.RemoveAll<IDeleteTriajeBehaviorPipelineFactory>();
-                    services.RemoveAll<IGetAllTipoPesosBehaviorPipelineFactory>();
-                    services.RemoveAll<IGetAllVacunosSanidadBehaviorPipelineFactory>();
-                    services.RemoveAll<IGetHistorialByVacunoIdBehaviorPipelineFactory>();
-                    services.RemoveAll<IGetHistorialGeneralBehaviorPipelineFactory>();
-                    services.RemoveAll<IGenerateTriajesPdfBehaviorPipelineFactory>();
-                    services.RemoveAll<IGenerateTriajesExcelBehaviorPipelineFactory>();
+
+                    // ============================================================
+                    // Estado compartido de los tests
+                    // ============================================================
 
                     services.AddSingleton(_state);
-                    services.AddSingleton<IGetAllTriajesBehaviorPipelineFactory, GetAllFactory>();
-                    services.AddSingleton<IGetTriajeByIdBehaviorPipelineFactory, GetByIdFactory>();
-                    services.AddSingleton<ICreateTriajeBehaviorPipelineFactory, CreateFactory>();
-                    services.AddSingleton<IUpdateTriajeBehaviorPipelineFactory, UpdateFactory>();
-                    services.AddSingleton<IDeleteTriajeBehaviorPipelineFactory, DeleteFactory>();
-                    services.AddSingleton<IGetAllTipoPesosBehaviorPipelineFactory, TipoPesoFactory>();
-                    services.AddSingleton<IGetAllVacunosSanidadBehaviorPipelineFactory, VacunosFactory>();
-                    services.AddSingleton<IGetHistorialByVacunoIdBehaviorPipelineFactory, HistorialFactory>();
-                    services.AddSingleton<IGetHistorialGeneralBehaviorPipelineFactory, HistorialGeneralFactory>();
-                    services.AddSingleton<IGenerateTriajesPdfBehaviorPipelineFactory, PdfFactory>();
-                    services.AddSingleton<IGenerateTriajesExcelBehaviorPipelineFactory, ExcelFactory>();
+
+
+                    // ============================================================
+                    // BehaviorDispatcher falso
+                    //
+                    // Los controllers seguirán usando IBehaviorDispatcher,
+                    // pero durante el test no ejecutaremos los handlers reales.
+                    // ============================================================
+
+                    services.RemoveAll<IBehaviorDispatcher>();
+
+                    var dispatcher = new TestBehaviorDispatcher();
+
+
+                    // ============================================================
+                    // GET ALL TRIAJES
+                    // ============================================================
+
+                    dispatcher.Setup<GetAllTriajesQuery, GetAllTriajesOutput>(
+                        (query, _) =>
+                        {
+                            _state.GetAllQuery = query;
+
+                            return Task.FromResult(
+                                new GetAllTriajesOutput(
+                                    new[]
+                                    {
+                                        CreateTriajeOutput()
+                                    },
+                                    1
+                                )
+                            );
+                        });
+
+
+                    // ============================================================
+                    // GET TRIAJE BY ID
+                    // ============================================================
+
+                    dispatcher.Setup<GetTriajeByIdQuery, GetTriajeByIdOutput>(
+                        (query, _) =>
+                        {
+                            _state.GetByIdCommand = query;
+
+                            return Task.FromResult(
+                                new GetTriajeByIdOutput(
+                                    query.Id,
+                                    $"TRI{query.Id:000}",
+                                    Now,
+                                    5,
+                                    "Luna",
+                                    "CONTROL",
+                                    120m,
+                                    "Obs",
+                                    "ACTIVO",
+                                    10,
+                                    Now
+                                )
+                            );
+                        });
+
+
+                    // ============================================================
+                    // CREATE TRIAJE
+                    // ============================================================
+
+                    dispatcher.Setup<CreateTriajeCommand, CreateTriajeOutput>(
+                        (command, _) =>
+                        {
+                            _state.CreateCommand = command;
+
+                            return Task.FromResult(
+                                new CreateTriajeOutput(
+                                    10,
+                                    "TRI010",
+                                    Now,
+                                    command.VacunoId,
+                                    command.TipoPesoCode!,
+                                    command.PesoKg,
+                                    command.Observaciones,
+                                    "ACTIVO",
+                                    command.EncargadoUsuarioId,
+                                    Now
+                                )
+                            );
+                        });
+
+
+                    // ============================================================
+                    // UPDATE TRIAJE
+                    // ============================================================
+
+                    dispatcher.Setup<UpdateTriajeCommand, UpdateTriajeOutput>(
+                        (command, _) =>
+                        {
+                            _state.UpdateCommand = command;
+
+                            return Task.FromResult(
+                                new UpdateTriajeOutput(
+                                    command.Id,
+                                    $"TRI{command.Id:000}",
+                                    Now,
+                                    5,
+                                    "Luna",
+                                    command.TipoPesoCode!,
+                                    command.PesoKg,
+                                    command.Observaciones,
+                                    "ACTIVO",
+                                    command.EncargadoUsuarioId,
+                                    Now,
+                                    Now
+                                )
+                            );
+                        });
+
+
+                    // ============================================================
+                    // DELETE TRIAJE
+                    // ============================================================
+
+                    dispatcher.Setup<DeleteTriajeCommand, EmptyOutput>(
+                        (command, _) =>
+                        {
+                            _state.DeleteCommand = command;
+
+                            return Task.FromResult(
+                                EmptyOutput.Value
+                            );
+                        });
+
+
+                    // ============================================================
+                    // CATÁLOGO: TIPOS DE PESO
+                    // ============================================================
+
+                    dispatcher.Setup<EmptyCommandQuery, GetAllTipoPesosOutput>(
+                        (_, _) =>
+                        {
+                            return Task.FromResult(
+                                new GetAllTipoPesosOutput(
+                                    new[]
+                                    {
+                                        new TipoPesoItemOutput(
+                                            "CONTROL",
+                                            "Peso Control"
+                                        )
+                                    }
+                                )
+                            );
+                        });
+
+
+                    // ============================================================
+                    // CATÁLOGO: VACUNOS
+                    // ============================================================
+
+                    dispatcher.Setup<EmptyCommandQuery, GetAllVacunosSanidadOutput>(
+                        (_, _) =>
+                        {
+                            return Task.FromResult(
+                                new GetAllVacunosSanidadOutput(
+                                    new[]
+                                    {
+                                        new VacunoSanidadItemOutput(
+                                            5,
+                                            "VAC005",
+                                            "Luna"
+                                        )
+                                    }
+                                )
+                            );
+                        });
+
+
+                    // ============================================================
+                    // HISTORIAL POR VACUNO
+                    // ============================================================
+
+                    dispatcher.Setup<GetHistorialByVacunoIdQuery, GetHistorialByVacunoIdOutput>(
+                        (query, _) =>
+                        {
+                            _state.HistorialCommand = query;
+
+                            return Task.FromResult(
+                                new GetHistorialByVacunoIdOutput(
+                                    new[]
+                                    {
+                                        new HistorialTriajeItemOutput(
+                                            1,
+                                            Now,
+                                            "CONTROL",
+                                            120m
+                                        )
+                                    }
+                                )
+                            );
+                        });
+
+
+                    // ============================================================
+                    // HISTORIAL GENERAL
+                    // ============================================================
+
+                    dispatcher.Setup<GetHistorialGeneralQuery, GetHistorialGeneralOutput>(
+                        (query, _) =>
+                        {
+                            _state.HistorialGeneralCommand = query;
+
+                            return Task.FromResult(
+                                new GetHistorialGeneralOutput(
+                                    new[]
+                                    {
+                                        new HistorialTriajeItemOutput(
+                                            1,
+                                            Now,
+                                            "CONTROL",
+                                            120m
+                                        )
+                                    }
+                                )
+                            );
+                        });
+
+
+                    // ============================================================
+                    // GENERAR PDF
+                    // ============================================================
+
+                    dispatcher.Setup<GenerateTriajesPdfQuery, GenerateTriajesPdfOutput>(
+                        (query, _) =>
+                        {
+                            _state.PdfQuery = query;
+
+                            return Task.FromResult(
+                                new GenerateTriajesPdfOutput(
+                                    new byte[] { 1, 2, 3 },
+                                    "application/pdf",
+                                    "triajes.pdf"
+                                )
+                            );
+                        });
+
+
+                    // ============================================================
+                    // GENERAR EXCEL
+                    // ============================================================
+
+                    dispatcher.Setup<GenerateTriajesExcelQuery, GenerateTriajesExcelOutput>(
+                        (query, _) =>
+                        {
+                            _state.ExcelQuery = query;
+
+                            return Task.FromResult(
+                                new GenerateTriajesExcelOutput(
+                                    new byte[] { 1, 2, 3 },
+                                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                    "triajes.xlsx"
+                                )
+                            );
+                        });
+
+
+                    // ============================================================
+                    // Registrar el dispatcher falso
+                    // ============================================================
+
+                    services.AddSingleton<IBehaviorDispatcher>(dispatcher);
                 });
-            });
+                            });
 
         _client = factory.CreateClient();
         _client.DefaultRequestHeaders.Add("X-Tenant-Url", "test.zootech.test");
@@ -225,14 +467,44 @@ public class TriajeApiIntegrationTests
     private sealed class SanidadApiTestState
     {
         public GetAllTriajesQuery? GetAllQuery { get; set; }
-        public GetTriajeByIdCommand? GetByIdCommand { get; set; }
+        public GetTriajeByIdQuery? GetByIdCommand { get; set; }
         public CreateTriajeCommand? CreateCommand { get; set; }
         public UpdateTriajeCommand? UpdateCommand { get; set; }
         public DeleteTriajeCommand? DeleteCommand { get; set; }
         public GenerateTriajesPdfQuery? PdfQuery { get; set; }
         public GenerateTriajesExcelQuery? ExcelQuery { get; set; }
-        public GetHistorialByVacunoIdCommand? HistorialCommand { get; set; }
-        public GetHistorialGeneralCommand? HistorialGeneralCommand { get; set; }
+        public GetHistorialByVacunoIdQuery? HistorialCommand { get; set; }
+        public GetHistorialGeneralQuery? HistorialGeneralCommand { get; set; }
+    }
+
+    private sealed class TestBehaviorDispatcher : IBehaviorDispatcher
+    {
+        private readonly Dictionary<Type, Func<object, CancellationToken, Task<object>>>
+            _handlers = new();
+
+        public void Setup<TRequest, TResponse>(
+            Func<TRequest, CancellationToken, Task<TResponse>> handler)
+        {
+            _handlers[typeof(TRequest)] = async (request, cancellationToken) =>
+                await handler((TRequest)request, cancellationToken);
+        }
+
+        public async Task<TResponse> Send<TRequest, TResponse>(
+            TRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            if (!_handlers.TryGetValue(
+                    typeof(TRequest),
+                    out var handler))
+            {
+                throw new InvalidOperationException(
+                    $"No test handler configured for {typeof(TRequest).Name}");
+            }
+
+            var response = await handler(request, cancellationToken);
+
+            return (TResponse)response;
+        }
     }
 
     private sealed class FakeTenantStore : ITenantStore
@@ -257,107 +529,5 @@ public class TriajeApiIntegrationTests
         public Task AuditEventAsync(AuditEventInfo auditEventInfo) => Task.CompletedTask;
 
         public Task AuditErrorAsync(AuditErrorInfo auditErrorInfo) => Task.CompletedTask;
-    }
-
-    private sealed class GetAllFactory(SanidadApiTestState state) : IGetAllTriajesBehaviorPipelineFactory
-    {
-        public BehaviorPipeline<GetAllTriajesQuery, GetAllTriajesOutput> Create()
-            => Pipeline<GetAllTriajesQuery, GetAllTriajesOutput>(query =>
-            {
-                state.GetAllQuery = query;
-                return Task.FromResult(new GetAllTriajesOutput(new[] { CreateTriajeOutput() }, 1));
-            });
-    }
-
-    private sealed class GetByIdFactory(SanidadApiTestState state) : IGetTriajeByIdBehaviorPipelineFactory
-    {
-        public BehaviorPipeline<GetTriajeByIdCommand, GetTriajeByIdOutput> Create()
-            => Pipeline<GetTriajeByIdCommand, GetTriajeByIdOutput>(command =>
-            {
-                state.GetByIdCommand = command;
-                return Task.FromResult(new GetTriajeByIdOutput(command.Id, $"TRI{command.Id:000}", Now, 5, "Luna", "CONTROL", 120m, "Obs", "ACTIVO", 10, Now));
-            });
-    }
-
-    private sealed class CreateFactory(SanidadApiTestState state) : ICreateTriajeBehaviorPipelineFactory
-    {
-        public BehaviorPipeline<CreateTriajeCommand, CreateTriajeOutput> Create()
-            => Pipeline<CreateTriajeCommand, CreateTriajeOutput>(command =>
-            {
-                state.CreateCommand = command;
-                return Task.FromResult(new CreateTriajeOutput(10, "TRI010", Now, command.VacunoId, command.TipoPesoCode!, command.PesoKg, command.Observaciones, "ACTIVO", command.EncargadoUsuarioId, Now));
-            });
-    }
-
-    private sealed class UpdateFactory(SanidadApiTestState state) : IUpdateTriajeBehaviorPipelineFactory
-    {
-        public BehaviorPipeline<UpdateTriajeCommand, UpdateTriajeOutput> Create()
-            => Pipeline<UpdateTriajeCommand, UpdateTriajeOutput>(command =>
-            {
-                state.UpdateCommand = command;
-                return Task.FromResult(new UpdateTriajeOutput(command.Id, $"TRI{command.Id:000}", Now, 5, "Luna", command.TipoPesoCode!, command.PesoKg, command.Observaciones, "ACTIVO", command.EncargadoUsuarioId, Now, Now));
-            });
-    }
-
-    private sealed class DeleteFactory(SanidadApiTestState state) : IDeleteTriajeBehaviorPipelineFactory
-    {
-        public BehaviorPipeline<DeleteTriajeCommand, EmptyOutput> Create()
-            => Pipeline<DeleteTriajeCommand, EmptyOutput>(command =>
-            {
-                state.DeleteCommand = command;
-                return Task.FromResult(EmptyOutput.Value);
-            });
-    }
-
-    private sealed class TipoPesoFactory : IGetAllTipoPesosBehaviorPipelineFactory
-    {
-        public BehaviorPipeline<EmptyCommand, GetAllTipoPesosOutput> Create()
-            => Pipeline<EmptyCommand, GetAllTipoPesosOutput>(_ => Task.FromResult(new GetAllTipoPesosOutput(new[] { new TipoPesoItemOutput("CONTROL", "Peso Control") })));
-    }
-
-    private sealed class VacunosFactory : IGetAllVacunosSanidadBehaviorPipelineFactory
-    {
-        public BehaviorPipeline<EmptyCommand, GetAllVacunosSanidadOutput> Create()
-            => Pipeline<EmptyCommand, GetAllVacunosSanidadOutput>(_ => Task.FromResult(new GetAllVacunosSanidadOutput(new[] { new VacunoSanidadItemOutput(5, "VAC005", "Luna") })));
-    }
-
-    private sealed class HistorialFactory(SanidadApiTestState state) : IGetHistorialByVacunoIdBehaviorPipelineFactory
-    {
-        public BehaviorPipeline<GetHistorialByVacunoIdCommand, GetHistorialByVacunoIdOutput> Create()
-            => Pipeline<GetHistorialByVacunoIdCommand, GetHistorialByVacunoIdOutput>(command =>
-            {
-                state.HistorialCommand = command;
-                return Task.FromResult(new GetHistorialByVacunoIdOutput(new[] { new HistorialTriajeItemOutput(1, Now, "CONTROL", 120m) }));
-            });
-    }
-
-    private sealed class HistorialGeneralFactory(SanidadApiTestState state) : IGetHistorialGeneralBehaviorPipelineFactory
-    {
-        public BehaviorPipeline<GetHistorialGeneralCommand, GetHistorialGeneralOutput> Create()
-            => Pipeline<GetHistorialGeneralCommand, GetHistorialGeneralOutput>(command =>
-            {
-                state.HistorialGeneralCommand = command;
-                return Task.FromResult(new GetHistorialGeneralOutput(new[] { new HistorialTriajeItemOutput(1, Now, "CONTROL", 120m) }));
-            });
-    }
-
-    private sealed class PdfFactory(SanidadApiTestState state) : IGenerateTriajesPdfBehaviorPipelineFactory
-    {
-        public BehaviorPipeline<GenerateTriajesPdfQuery, GenerateTriajesPdfOutput> Create()
-            => Pipeline<GenerateTriajesPdfQuery, GenerateTriajesPdfOutput>(query =>
-            {
-                state.PdfQuery = query;
-                return Task.FromResult(new GenerateTriajesPdfOutput(new byte[] { 1, 2, 3 }, "application/pdf", "triajes.pdf"));
-            });
-    }
-
-    private sealed class ExcelFactory(SanidadApiTestState state) : IGenerateTriajesExcelBehaviorPipelineFactory
-    {
-        public BehaviorPipeline<GenerateTriajesExcelQuery, GenerateTriajesExcelOutput> Create()
-            => Pipeline<GenerateTriajesExcelQuery, GenerateTriajesExcelOutput>(query =>
-            {
-                state.ExcelQuery = query;
-                return Task.FromResult(new GenerateTriajesExcelOutput(new byte[] { 1, 2, 3 }, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "triajes.xlsx"));
-            });
     }
 }

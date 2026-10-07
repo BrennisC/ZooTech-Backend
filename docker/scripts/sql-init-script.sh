@@ -20,6 +20,11 @@ echo "SQL Server disponible."
 # en SQL Server 
 # ============================================================
 
+if [[ "${ZOOTECH_SQL_INIT_EXECUTE,,}" == "false" ]]; then
+    echo "Saltando proceso de inicializacion de BD admin y tenants"
+    exit 0
+fi
+
 if [ -z "$MULTITENANT_ADMIN_DATABASE_NAME" ]; then
     echo "Error: La variable MULTITENANT_ADMIN_DATABASE_NAME no está definida o está vacía. Proceso cancelado, no se insertaron datos."
     exit 1

@@ -31,11 +31,15 @@ services:
       - "16001:16001"
     environment: 
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      ASPNETCORE_URLS: ${ASPNETCORE_URLS:-http://+:16001}
+      ASPNETCORE_HTTP_PORTS: ${ASPNETCORE_HTTP_PORTS:-16001}
+
+      AllowedHosts: ${KESTREL_ALLOWED_HOSTS:-localhost}
 
       ConnectionStrings__TenantTemplate: ${CONNECTION_STRING_TENANT_TEMPLATE}
       ConnectionStrings__AdminTenantTemplate: ${CONNECTION_STRING_ADMIN_TENANT_TEMPLATE}
 
-      Kestrel__Endpoints__Http__Url: ${BACKEND_URL:-http:*:16001}
+      Kestrel__Endpoints__Http__Url: ${BACKEND_URL:-http://*:16001}
 
       MultiTenant__BaseDomain: ${MULTITENANT_BASE_DOMAIN:-zentrycorp.local}
       MultiTenant__AdminSubDomain: ${MULTITENANT_ADMIN_SUB_DOMAIN:-admin}
@@ -111,6 +115,7 @@ services:
       MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
 
       ZOOTECH_SQL_TENANTS_INIT_EXECUTE: ${ZOOTECH_SQL_TENANTS_INIT_EXECUTE:-false}
+      ZOOTECH_SQL_INIT_EXECUTE: ${ZOOTECH_SQL_INIT_EXECUTE:-false}
 
       ZOOTECH_DB_USER: ${ZOOTECH_DB_USER:-zootech-db-user}
       ZOOTECH_DB_USER_PASSWORD: ${ZOOTECH_DB_USER_PASSWORD}
@@ -262,7 +267,7 @@ services:
   # ==========================================================================
 
   zootech-db-mongodb:
-    image: mongo:8
+    image: mongo:7.0
     container_name: zootech-db-mongodb
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGODB_INITDB_ROOT_USERNAME:-mongodb_root}

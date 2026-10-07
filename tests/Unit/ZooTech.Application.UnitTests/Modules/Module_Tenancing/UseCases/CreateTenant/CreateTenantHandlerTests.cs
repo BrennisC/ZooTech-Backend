@@ -21,7 +21,7 @@ public class CreateTenantHandlerTests
         var command = TenantTestDataFactory.CreateValidCommand();
 
         // Act
-        var result = await handler.Handle(command);
+        var result = await handler.HandleAsync(command);
 
         // Assert
         result.Should().NotBeNull();
@@ -44,7 +44,7 @@ public class CreateTenantHandlerTests
         var command = TenantTestDataFactory.CreateValidCommand();
 
         // Act
-        var act = async () => await handler.Handle(command);
+        var act = async () => await handler.HandleAsync(command);
 
         // Assert
         await act.Should().ThrowAsync<Exception>();

@@ -152,6 +152,12 @@ public sealed class TenantReportBrandingProviderTests
             .Setup(factory => factory.CreateClient("TenantReportBranding"))
             .Returns(new HttpClient(handler, disposeHandler: false));
 
+        var tenantDbContextFactory = new Mock<ITenantDbContextFactory>();
+
+        tenantDbContextFactory
+            .Setup(mock => mock.CreateDbContextByTenantContext())
+            .Returns(db);
+
         return new TenantReportBrandingProvider(
             tenantDbContextFactory.Object,
             tenantContext,

@@ -1,0 +1,186 @@
+name: Backend - Tests-SonarQube-Deploy
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - '*.sln'
+      - '*.slnx'
+      - '.github/workflows/github-runner-deploy-production.yml'
+      - 'tools/ZooTech.DataSeeder/**'
+      - 'docker-compose.yml'
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'docker/**'
+      - '.config/**'
+
+  workflow_dispatch:
+
+  pull_request:
+    branches:
+      - main
+    types:
+      - closed
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - '*.sln'
+      - '*.slnx'
+      - '.github/workflows/github-runner-deploy-production.yml'
+      - 'tools/ZooTech.DataSeeder/**'
+      - 'docker-compose.yml'
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'docker/**'
+      - '.config/**'
+
+env:
+  DOTNET_VERSION: ${{ vars.DOTNET_VERSION }}
+  SOLUTION_FILE_NAME: 'ZooTech Backend - Solution.slnx'
+  SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+  EXECUTE_UNITARY_TESTS: ${{ vars.EXECUTE_UNITARY_TESTS }}
+  EXECUTE_INTEGRATION_TESTS: ${{ vars.EXECUTE_INTEGRATION_TESTS }}
+
+jobs:
+
+  quality:
+    name: Tests & SonarQube
+
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event.pull_request.merged == true &&
+        github.event.pull_request.head.ref == 'develop' &&
+        github.event.pull_request.base.ref == 'main'
+      )
+
+    runs-on: self-hosted
+    environment: production-env
+    timeout-minutes: 30
+
+    steps:
+
+      # ====================================
+      # Checkout
+      # ====================================
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          clean: true
+
+      # ====================================
+      # .NET 10
+      # ====================================
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      # ====================================
+      # Restaurar dependencias
+      # ====================================
+      - name: Restore
+        run: dotnet restore "${{ env.SOLUTION_FILE_NAME }}"
+
+      # ====================================
+      # Restaurar herramientas del proyecto
+      # ====================================
+      - name: Restore .NET tools
+        run: dotnet tool restore
+
+      # ====================================
+      # Iniciar análisis SonarQube
+      # ====================================
+      - name: SonarQube Begin
+        shell: pwsh
+        run: |
+          dotnet tool run dotnet-sonarscanner begin `
+            /k:"com.zootech.backend" `
+            /n:"ZooTech Backend" `
+            /d:sonar.host.url="$env:SONAR_HOST_URL" `
+            /d:sonar.token="$env:SONAR_TOKEN" `
+            /d:sonar.cs.opencover.reportsPaths="TestResults/**/coverage.opencover.xml"
+
+      # ====================================
+      # Compilar para el análisis
+      # ====================================
+      - name: Build
+        run: |
+          dotnet build "${{ env.SOLUTION_FILE_NAME }}" `
+            --no-restore `
+            --configuration Release
+
+      # ====================================
+      # Tests + cobertura
+      # ====================================
+      - name: Unit Tests
+        if: ${{ env.EXECUTE_UNITARY_TESTS == 'true' }}
+        run: |
+          Get-ChildItem -Path "tests/Unit" -Filter "*.csproj" -Recurse |
+            ForEach-Object {
+              dotnet test $_.FullName `
+                --no-build `
+                --configuration Release `
+                --collect:"XPlat Code Coverage" `
+                --settings coverlet.runsettings `
+                --results-directory TestResults `
+                --logger "trx"
+
+              if ($LASTEXITCODE -ne 0) {
+                exit $LASTEXITCODE
+              }
+            }
+
+      - name: Integration Tests
+        if: ${{ env.EXECUTE_INTEGRATION_TESTS == 'true' }}
+        run: |
+          Get-ChildItem -Path "tests/Integration" -Filter "*.csproj" -Recurse |
+            ForEach-Object {
+              dotnet test $_.FullName `
+                --no-build `
+                --configuration Release `
+                --collect:"XPlat Code Coverage" `
+                --settings coverlet.runsettings `
+                --results-directory TestResults `
+                --logger "trx"
+
+              if ($LASTEXITCODE -ne 0) {
+                exit $LASTEXITCODE
+              }
+            }
+
+      # ====================================
+      # Finalizar y enviar análisis
+      # ====================================
+      - name: SonarQube End
+        shell: pwsh
+        run: |
+          dotnet tool run dotnet-sonarscanner end `
+            /d:sonar.token="$env:SONAR_TOKEN"
+
+  deploy:
+    name: Deploy via Dockploy
+    environment: production-env
+    needs: quality
+    runs-on: self-hosted
+    timeout-minutes: 10
+
+    steps:
+      - name: Trigger Dockploy Webhook
+        env:
+          DOCKPLOY_WEBHOOK_BACKEND: ${{ secrets.DOCKPLOY_WEBHOOK_BACKEND }}
+        run: |
+          if [ -z "$DOCKPLOY_WEBHOOK_BACKEND" ]; then
+            echo "Error: DOCKPLOY_WEBHOOK_BACKEND secret is not configured." >&2
+            exit 1
+          fi
+          curl --fail --silent --show-error --max-time 60 -X POST \
+            -H "Content-Type: application/json" \
+            -H "X-GitHub-Event: deploy-from-github" \
+            -d '{"ref": "refs/heads/main", "environment": "production"}' \
+            "$DOCKPLOY_WEBHOOK_BACKEND"
+          echo "Production deploy webhook for ZooTech Backend triggered successfully."

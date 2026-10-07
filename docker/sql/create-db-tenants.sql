@@ -7,7 +7,17 @@ GO
 
 IF DB_ID(N'$(ZOOTECH_TENANT_DB_NAME_1)') IS NULL
 BEGIN
+
+    PRINT 'Creando $(ZOOTECH_TENANT_DB_NAME_1)...';
+
     CREATE DATABASE [$(ZOOTECH_TENANT_DB_NAME_1)];
+
+END
+ELSE
+BEGIN
+
+    PRINT '$(ZOOTECH_TENANT_DB_NAME_1) ya existe.';
+
 END;
 GO
 
@@ -28,8 +38,23 @@ BEGIN
 END;
 GO
 
-ALTER ROLE [db_owner]
-ADD MEMBER [$(ZOOTECH_DB_USER)];
+IF NOT EXISTS
+(
+    SELECT 1
+    FROM sys.database_role_members rm
+    INNER JOIN sys.database_principals role_principal
+        ON rm.role_principal_id = role_principal.principal_id
+    INNER JOIN sys.database_principals member_principal
+        ON rm.member_principal_id = member_principal.principal_id
+    WHERE role_principal.name = N'db_owner'
+      AND member_principal.name = N'$(ZOOTECH_DB_USER)'
+)
+BEGIN
+
+    ALTER ROLE [db_owner]
+    ADD MEMBER [$(ZOOTECH_DB_USER)];
+
+END;
 GO
 
 /* ============================================================
@@ -41,7 +66,17 @@ GO
 
 IF DB_ID(N'$(ZOOTECH_TENANT_DB_NAME_2)') IS NULL
 BEGIN
+
+    PRINT 'Creando $(ZOOTECH_TENANT_DB_NAME_2)...';
+
     CREATE DATABASE [$(ZOOTECH_TENANT_DB_NAME_2)];
+
+END
+ELSE
+BEGIN
+
+    PRINT '$(ZOOTECH_TENANT_DB_NAME_2) ya existe.';
+
 END;
 GO
 
@@ -61,8 +96,23 @@ BEGIN
 END;
 GO
 
-ALTER ROLE [db_owner]
-ADD MEMBER [$(ZOOTECH_DB_USER)];
+IF NOT EXISTS
+(
+    SELECT 1
+    FROM sys.database_role_members rm
+    INNER JOIN sys.database_principals role_principal
+        ON rm.role_principal_id = role_principal.principal_id
+    INNER JOIN sys.database_principals member_principal
+        ON rm.member_principal_id = member_principal.principal_id
+    WHERE role_principal.name = N'db_owner'
+      AND member_principal.name = N'$(ZOOTECH_DB_USER)'
+)
+BEGIN
+
+    ALTER ROLE [db_owner]
+    ADD MEMBER [$(ZOOTECH_DB_USER)];
+
+END;
 GO
 
 /* ============================================================
@@ -75,7 +125,17 @@ GO
 
 IF DB_ID(N'$(ZOOTECH_TENANT_DB_NAME_3)') IS NULL
 BEGIN
+
+    PRINT 'Creando $(ZOOTECH_TENANT_DB_NAME_3)...';
+
     CREATE DATABASE [$(ZOOTECH_TENANT_DB_NAME_3)];
+
+END
+ELSE
+BEGIN
+
+    PRINT '$(ZOOTECH_TENANT_DB_NAME_3) ya existe.';
+
 END;
 GO
 
@@ -95,6 +155,21 @@ BEGIN
 END;
 GO
 
-ALTER ROLE [db_owner]
-ADD MEMBER [$(ZOOTECH_DB_USER)];
+IF NOT EXISTS
+(
+    SELECT 1
+    FROM sys.database_role_members rm
+    INNER JOIN sys.database_principals role_principal
+        ON rm.role_principal_id = role_principal.principal_id
+    INNER JOIN sys.database_principals member_principal
+        ON rm.member_principal_id = member_principal.principal_id
+    WHERE role_principal.name = N'db_owner'
+      AND member_principal.name = N'$(ZOOTECH_DB_USER)'
+)
+BEGIN
+
+    ALTER ROLE [db_owner]
+    ADD MEMBER [$(ZOOTECH_DB_USER)];
+
+END;
 GO
