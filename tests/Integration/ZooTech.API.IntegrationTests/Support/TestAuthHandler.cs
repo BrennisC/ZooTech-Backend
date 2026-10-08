@@ -25,9 +25,10 @@ internal sealed class TestAuthHandler : AuthenticationHandler<AuthenticationSche
         {
             new Claim(ClaimTypes.NameIdentifier, "1"),
             new Claim(ClaimTypes.Name, "integration-test"),
-            new Claim(ClaimTypes.Role, AuthorizationRoles.Admin)
+            new Claim(ClaimTypes.Email , "integration-test@zootecnia.test"),
+            new Claim(ClaimTypes.Role, UserRole.Admin.ToString())
         };
-        var identity = new ClaimsIdentity(claims, SchemeName);
+        var identity = new ClaimsIdentity(claims, SchemeName, ClaimTypes.Name, ClaimTypes.Role);
         var principal = new ClaimsPrincipal(identity);
         var ticket = new AuthenticationTicket(principal, SchemeName);
 

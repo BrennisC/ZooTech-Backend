@@ -1,12 +1,9 @@
 using FluentAssertions;
-using Xunit;
 using System.Net;
 using System.Net.Http.Json;
 using ZooTech.InterfaceAdapters.DTOs;
 using ZooTech.InterfaceAdapters.Modules.Module_Vacuno.DTOs.Responses;
 using ZooTech.Domain.Ganaderia.Module_Vacuno.Entities.GetArbolGenealogico;
-using ZooTech.Application.Modules.Module_Vacuno.UseCases.GetVacunoById;
-using ZooTech.Application.Modules.Module_Vacuno.UseCases.GetActivityStats;
 using ClosedXML.Excel;
 using ZooTech.API.IntegrationTests.Seeders;
 using ZooTech.API.IntegrationTests.Support;
