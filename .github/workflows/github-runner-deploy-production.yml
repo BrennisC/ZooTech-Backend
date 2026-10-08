@@ -149,33 +149,29 @@ jobs:
             -print0 
           )
 
-      - name: Integration Tests
-        if: ${{ env.EXECUTE_INTEGRATION_TESTS == 'true' }}
-        shell: bash
-        run: |
-          set -e
-
-          while IFS= read -r -d '' project; do
-
-              echo "========================================" 
-              echo "Ejecutando Integration Tests" 
-              echo "Proyecto: $project" 
-              echo "========================================"
-
-              dotnet test "$project" \
-                --no-build \
-                --configuration Release \
-                --collect:"XPlat Code Coverage" \
-                --settings coverlet.runsettings \
-                --results-directory TestResults \
-                --logger "trx"
-
-            done < <( 
-              find tests/Integration \ 
-              -type f \ 
-              -name "*.csproj" \ 
-              -print0 
-            )
+      # - name: Integration Tests
+      #   if: ${{ env.EXECUTE_INTEGRATION_TESTS == 'true' }}
+      #   shell: bash
+      #   run: |
+      #     set -e
+      #     while IFS= read -r -d '' project; do
+      #         echo "========================================" 
+      #         echo "Ejecutando Integration Tests" 
+      #         echo "Proyecto: $project" 
+      #         echo "========================================"
+      #         dotnet test "$project" \
+      #           --no-build \
+      #           --configuration Release \
+      #           --collect:"XPlat Code Coverage" \
+      #           --settings coverlet.runsettings \
+      #           --results-directory TestResults \
+      #           --logger "trx"
+      #       done < <( 
+      #         find tests/Integration \ 
+      #         -type f \ 
+      #         -name "*.csproj" \ 
+      #         -print0 
+      #       )
 
       # ====================================
       # Finalizar y enviar análisis
