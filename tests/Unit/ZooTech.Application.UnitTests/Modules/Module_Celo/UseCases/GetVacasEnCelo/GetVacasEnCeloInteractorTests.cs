@@ -25,7 +25,7 @@ public sealed class GetVacasEnCeloInteractorTests
         var celos = new List<CeloListItem> { BuildCeloListItem(1, "VAC-001", "Manchada", hoy.AddDays(-dias)) };
         SetupRepository(celos, new Dictionary<long, int>(), new Dictionary<long, int>());
 
-        var output = await _interactor.HandleAsync(new GetVacasEnCeloCommand(), CancellationToken.None);
+        var output = await _interactor.HandleAsync(new GetVacasEnCeloQuery(), CancellationToken.None);
 
         Assert.Equal("En celo", Assert.Single(output.Items).Estado);
     }
@@ -39,7 +39,7 @@ public sealed class GetVacasEnCeloInteractorTests
         var celos = new List<CeloListItem> { BuildCeloListItem(1, "VAC-001", "Manchada", hoy.AddDays(-dias)) };
         SetupRepository(celos, new Dictionary<long, int>(), new Dictionary<long, int>());
 
-        var output = await _interactor.HandleAsync(new GetVacasEnCeloCommand(), CancellationToken.None);
+        var output = await _interactor.HandleAsync(new GetVacasEnCeloQuery(), CancellationToken.None);
 
         Assert.Equal("Próximo", Assert.Single(output.Items).Estado);
     }
@@ -53,7 +53,7 @@ public sealed class GetVacasEnCeloInteractorTests
         var celos = new List<CeloListItem> { BuildCeloListItem(1, "VAC-001", "Manchada", hoy.AddDays(-dias)) };
         SetupRepository(celos, new Dictionary<long, int>(), new Dictionary<long, int>());
 
-        var output = await _interactor.HandleAsync(new GetVacasEnCeloCommand(), CancellationToken.None);
+        var output = await _interactor.HandleAsync(new GetVacasEnCeloQuery(), CancellationToken.None);
 
         Assert.Equal("Pasó", Assert.Single(output.Items).Estado);
     }
@@ -65,7 +65,7 @@ public sealed class GetVacasEnCeloInteractorTests
         var celos = new List<CeloListItem> { BuildCeloListItem(1, "VAC-001", "Manchada", hoy) };
         SetupRepository(celos, new Dictionary<long, int>(), new Dictionary<long, int>());
 
-        var output = await _interactor.HandleAsync(new GetVacasEnCeloCommand(), CancellationToken.None);
+        var output = await _interactor.HandleAsync(new GetVacasEnCeloQuery(), CancellationToken.None);
 
         var item = Assert.Single(output.Items);
         Assert.Equal(1, item.VecesEnCelo);
@@ -82,7 +82,7 @@ public sealed class GetVacasEnCeloInteractorTests
             new Dictionary<long, int> { [1] = 5 },
             new Dictionary<long, int> { [1] = 2 });
 
-        var output = await _interactor.HandleAsync(new GetVacasEnCeloCommand(), CancellationToken.None);
+        var output = await _interactor.HandleAsync(new GetVacasEnCeloQuery(), CancellationToken.None);
 
         var item = Assert.Single(output.Items);
         Assert.Equal(5, item.VecesEnCelo);
@@ -101,7 +101,7 @@ public sealed class GetVacasEnCeloInteractorTests
         SetupRepository(celos, new Dictionary<long, int>(), new Dictionary<long, int>());
 
         var output = await _interactor.HandleAsync(
-            new GetVacasEnCeloCommand
+            new GetVacasEnCeloQuery
             {
                 FechaInicio = new DateTime(2026, 6, 1),
                 FechaFin = new DateTime(2026, 6, 30),
@@ -124,7 +124,7 @@ public sealed class GetVacasEnCeloInteractorTests
         };
         SetupRepository(celos, new Dictionary<long, int>(), new Dictionary<long, int>());
 
-        var output = await _interactor.HandleAsync(new GetVacasEnCeloCommand(), CancellationToken.None);
+        var output = await _interactor.HandleAsync(new GetVacasEnCeloQuery(), CancellationToken.None);
 
         Assert.Equal(new[] { "VAC-002", "VAC-003", "VAC-001" }, output.Items.Select(i => i.Codigo));
     }
