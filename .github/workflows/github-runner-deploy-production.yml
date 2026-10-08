@@ -66,11 +66,18 @@ jobs:
 
       # ====================================
       # .NET 10
+      # Esto solo sirve para runners cuyo usuario tenga
+      # permiso de instalar sobre "/usr/"
       # ====================================
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
+      # - name: Setup .NET
+      #   uses: actions/setup-dotnet@v4
+      #   with:
+      #     dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Check .NET
+        run: |
+          dotnet --info
+          dotnet --list-sdks
 
       # ====================================
       # Restaurar dependencias
