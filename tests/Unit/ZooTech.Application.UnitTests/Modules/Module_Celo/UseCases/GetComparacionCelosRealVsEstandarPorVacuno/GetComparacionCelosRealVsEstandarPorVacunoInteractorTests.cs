@@ -23,7 +23,7 @@ public sealed class GetComparacionCelosRealVsEstandarPorVacunoInteractorTests
             .Returns(new List<CeloListItem>());
 
         var output = await _interactor.HandleAsync(
-            new GetComparacionCelosRealVsEstandarPorVacunoCommand { CodigoVacuno = "VAC-001" },
+            new GetComparacionCelosRealVsEstandarPorVacunoQuery { CodigoVacuno = "VAC-001" },
             CancellationToken.None);
 
         Assert.Empty(output.Items);
@@ -40,7 +40,7 @@ public sealed class GetComparacionCelosRealVsEstandarPorVacunoInteractorTests
             .Returns(celos);
 
         var output = await _interactor.HandleAsync(
-            new GetComparacionCelosRealVsEstandarPorVacunoCommand { CodigoVacuno = "VAC-001" },
+            new GetComparacionCelosRealVsEstandarPorVacunoQuery { CodigoVacuno = "VAC-001" },
             CancellationToken.None);
 
         Assert.Empty(output.Items);
@@ -57,7 +57,7 @@ public sealed class GetComparacionCelosRealVsEstandarPorVacunoInteractorTests
             .Returns(celos);
 
         var output = await _interactor.HandleAsync(
-            new GetComparacionCelosRealVsEstandarPorVacunoCommand { CodigoVacuno = null },
+            new GetComparacionCelosRealVsEstandarPorVacunoQuery { CodigoVacuno = null },
             CancellationToken.None);
 
         Assert.Empty(output.Items);
@@ -75,7 +75,7 @@ public sealed class GetComparacionCelosRealVsEstandarPorVacunoInteractorTests
             .Returns(celos);
 
         var output = await _interactor.HandleAsync(
-            new GetComparacionCelosRealVsEstandarPorVacunoCommand { CodigoVacuno = "VAC-001" },
+            new GetComparacionCelosRealVsEstandarPorVacunoQuery { CodigoVacuno = "VAC-001" },
             CancellationToken.None);
 
         var item = Assert.Single(output.Items);
@@ -98,7 +98,7 @@ public sealed class GetComparacionCelosRealVsEstandarPorVacunoInteractorTests
             .Returns(celos);
 
         var output = await _interactor.HandleAsync(
-            new GetComparacionCelosRealVsEstandarPorVacunoCommand { CodigoVacuno = "VAC-001" },
+            new GetComparacionCelosRealVsEstandarPorVacunoQuery { CodigoVacuno = "VAC-001" },
             CancellationToken.None);
 
         Assert.Equal(3, output.Items.Count);
@@ -123,7 +123,7 @@ public sealed class GetComparacionCelosRealVsEstandarPorVacunoInteractorTests
             .Returns(celos);
 
         var output = await _interactor.HandleAsync(
-            new GetComparacionCelosRealVsEstandarPorVacunoCommand
+            new GetComparacionCelosRealVsEstandarPorVacunoQuery
             {
                 CodigoVacuno = "VAC-001",
                 FechaInicio = new DateTime(2026, 3, 1),

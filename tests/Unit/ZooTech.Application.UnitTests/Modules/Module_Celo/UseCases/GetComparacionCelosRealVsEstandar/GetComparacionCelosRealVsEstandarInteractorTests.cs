@@ -22,7 +22,7 @@ public sealed class GetComparacionCelosRealVsEstandarInteractorTests
             .Returns(new List<DateTime>());
 
         var output = await _interactor.HandleAsync(
-            new GetComparacionCelosRealVsEstandarCommand(), CancellationToken.None);
+            new GetComparacionCelosRealVsEstandarQuery(), CancellationToken.None);
 
         Assert.Empty(output.Items);
     }
@@ -41,7 +41,7 @@ public sealed class GetComparacionCelosRealVsEstandarInteractorTests
             .Returns(registros);
 
         var output = await _interactor.HandleAsync(
-            new GetComparacionCelosRealVsEstandarCommand(), CancellationToken.None);
+            new GetComparacionCelosRealVsEstandarQuery(), CancellationToken.None);
 
         var item = Assert.Single(output.Items);
         Assert.Equal(DateOnly.FromDateTime(day), item.Fecha);
@@ -66,7 +66,7 @@ public sealed class GetComparacionCelosRealVsEstandarInteractorTests
             .Returns(registros);
 
         var output = await _interactor.HandleAsync(
-            new GetComparacionCelosRealVsEstandarCommand(), CancellationToken.None);
+            new GetComparacionCelosRealVsEstandarQuery(), CancellationToken.None);
 
         Assert.Equal(3, output.Items.Count);
         Assert.All(output.Items, item => Assert.Equal(2, item.RegistrosEstandar));
@@ -90,7 +90,7 @@ public sealed class GetComparacionCelosRealVsEstandarInteractorTests
             .Returns(registros);
 
         var output = await _interactor.HandleAsync(
-            new GetComparacionCelosRealVsEstandarCommand(), CancellationToken.None);
+            new GetComparacionCelosRealVsEstandarQuery(), CancellationToken.None);
 
         Assert.Equal(DateOnly.FromDateTime(day1), output.Items[0].Fecha);
         Assert.Equal(DateOnly.FromDateTime(day2), output.Items[1].Fecha);
@@ -110,7 +110,7 @@ public sealed class GetComparacionCelosRealVsEstandarInteractorTests
             .Returns(registros);
 
         var output = await _interactor.HandleAsync(
-            new GetComparacionCelosRealVsEstandarCommand(), CancellationToken.None);
+            new GetComparacionCelosRealVsEstandarQuery(), CancellationToken.None);
 
         Assert.All(output.Items, item => Assert.Equal(2, item.RegistrosEstandar));
     }

@@ -23,8 +23,8 @@ public sealed class GetCelosInteractorTests
         _repository.GetAllAsync(Arg.Any<CancellationToken>()).Returns(new List<CeloListItem>());
         _repository.GetVecesEnCeloCountsAsync(Arg.Any<CancellationToken>()).Returns(new Dictionary<long, int>());
 
-        var output = await _interactor.Handle(
-            Application.Common.Models.EmptyCommand.Value(AuditEventType.Read, "Get celos"),
+        var output = await _interactor.HandleAsync(
+            Application.Common.Models.EmptyCommandQuery.Value(AuditEventType.Read, "Get celos"),
             CancellationToken.None);
 
         Assert.Empty(output.Items);
@@ -57,8 +57,8 @@ public sealed class GetCelosInteractorTests
         _repository.GetVecesEnCeloCountsAsync(Arg.Any<CancellationToken>())
             .Returns(new Dictionary<long, int> { [10] = 4 });
 
-        var output = await _interactor.Handle(
-            Application.Common.Models.EmptyCommand.Value(AuditEventType.Read, "Get celos"),
+        var output = await _interactor.HandleAsync(
+            Application.Common.Models.EmptyCommandQuery.Value(AuditEventType.Read, "Get celos"),
             CancellationToken.None);
 
         Assert.Equal(2, output.Items.Count);

@@ -1,7 +1,6 @@
 using NSubstitute;
 using ZooTech.Application.Common.Exceptions;
 using ZooTech.Application.Modules.Module_Celo.UseCases.DeleteCelo;
-using ZooTech.Application.UnitTests.Modules.Module_Celo.UseCases;
 using ZooTech.Domain.Module_Celo.Entities;
 using ZooTech.Domain.Module_Celo.Interfaces;
 using ZooTech.Domain.Shared.Enums;
@@ -30,7 +29,7 @@ public sealed class DeleteCeloInteractorTests
         _repository.UpdateAsync(Arg.Any<Celo>(), Arg.Any<CancellationToken>())
             .Returns(c => c.Arg<Celo>());
 
-        var output = await _interactor.Handle(command, CancellationToken.None);
+        var output = await _interactor.HandleAsync(command, CancellationToken.None);
 
         Assert.Equal(Application.Common.Models.EmptyOutput.Value, output);
         await _repository.Received(1).UpdateAsync(
@@ -47,7 +46,7 @@ public sealed class DeleteCeloInteractorTests
             .Returns((Celo?)null);
 
         var exception = await Assert.ThrowsAsync<NotFoundException>(
-            () => _interactor.Handle(command, CancellationToken.None));
+            () => _interactor.HandleAsync(command, CancellationToken.None));
 
         Assert.Equal(ScopeName.Application, exception.ScopeName);
         Assert.Equal(ModuleName.Celo, exception.ModuleName);
@@ -66,7 +65,7 @@ public sealed class DeleteCeloInteractorTests
             .Returns(celo);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => _interactor.Handle(command, CancellationToken.None));
+            () => _interactor.HandleAsync(command, CancellationToken.None));
 
         Assert.Equal("El registro de celo ya se encuentra eliminado.", exception.Message);
         await _repository.DidNotReceive().UpdateAsync(Arg.Any<Celo>(), Arg.Any<CancellationToken>());
@@ -85,7 +84,7 @@ public sealed class DeleteCeloInteractorTests
             .Returns(celo);
 
         await Assert.ThrowsAsync<ArgumentException>(
-            () => _interactor.Handle(command, CancellationToken.None));
+            () => _interactor.HandleAsync(command, CancellationToken.None));
 
         await _repository.DidNotReceive().UpdateAsync(Arg.Any<Celo>(), Arg.Any<CancellationToken>());
     }
@@ -100,7 +99,7 @@ public sealed class DeleteCeloInteractorTests
             .Returns(celo);
 
         await Assert.ThrowsAsync<ArgumentException>(
-            () => _interactor.Handle(command, CancellationToken.None));
+            () => _interactor.HandleAsync(command, CancellationToken.None));
 
         await _repository.DidNotReceive().UpdateAsync(Arg.Any<Celo>(), Arg.Any<CancellationToken>());
     }
