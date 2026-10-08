@@ -182,7 +182,7 @@ jobs:
           set -e
 
           dotnet tool run dotnet-sonarscanner end \
-            /d:sonar.token="$env:SONAR_TOKEN"
+            /d:sonar.token="$SONAR_TOKEN"
 
   deploy:
     name: Deploy via Dockploy
