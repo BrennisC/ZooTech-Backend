@@ -95,22 +95,26 @@ jobs:
       # Iniciar análisis SonarQube
       # ====================================
       - name: SonarQube Begin
-        shell: pwsh
+        shell: bash
         run: |
-          dotnet tool run dotnet-sonarscanner begin `
-            /k:"com.zootech.backend" `
-            /n:"ZooTech Backend" `
-            /d:sonar.host.url="$env:SONAR_HOST_URL" `
-            /d:sonar.token="$env:SONAR_TOKEN" `
+          set -e
+          dotnet tool run dotnet-sonarscanner begin \
+            /k:"com.zootech.backend" \
+            /n:"ZooTech Backend" \
+            /d:sonar.host.url="$SONAR_HOST_URL" \
+            /d:sonar.token="$SONAR_TOKEN" \
             /d:sonar.cs.opencover.reportsPaths="TestResults/**/coverage.opencover.xml"
 
       # ====================================
       # Compilar para el análisis
       # ====================================
       - name: Build
+        shell: bash
         run: |
-          dotnet build "${{ env.SOLUTION_FILE_NAME }}" `
-            --no-restore `
+          set -e
+          
+          dotnet build "${{ env.SOLUTION_FILE_NAME }}" \
+            --no-restore \
             --configuration Release
 
       # ====================================
@@ -118,47 +122,69 @@ jobs:
       # ====================================
       - name: Unit Tests
         if: ${{ env.EXECUTE_UNITARY_TESTS == 'true' }}
+        shell: bash
         run: |
-          Get-ChildItem -Path "tests/Unit" -Filter "*.csproj" -Recurse |
-            ForEach-Object {
-              dotnet test $_.FullName `
-                --no-build `
-                --configuration Release `
-                --collect:"XPlat Code Coverage" `
-                --settings coverlet.runsettings `
-                --results-directory TestResults `
-                --logger "trx"
+          set -e
 
-              if ($LASTEXITCODE -ne 0) {
-                exit $LASTEXITCODE
-              }
-            }
+          while IFS= read -r -d '' project; do
+
+            echo "========================================" 
+            echo "Ejecutando Unit Tests"
+            echo "Proyecto: $project"
+            echo "========================================"
+
+            dotnet test "$project" \
+              --no-build \
+              --configuration Release \
+              --collect:"XPlat Code Coverage" \
+              --settings coverlet.runsettings \
+              --results-directory TestResults \
+              --logger "trx"
+
+          done < <( 
+            find tests/Unit \
+            -type f \ 
+            -name "*.csproj" \ 
+            -print0 
+          )
 
       - name: Integration Tests
         if: ${{ env.EXECUTE_INTEGRATION_TESTS == 'true' }}
+        shell: bash
         run: |
-          Get-ChildItem -Path "tests/Integration" -Filter "*.csproj" -Recurse |
-            ForEach-Object {
-              dotnet test $_.FullName `
-                --no-build `
-                --configuration Release `
-                --collect:"XPlat Code Coverage" `
-                --settings coverlet.runsettings `
-                --results-directory TestResults `
+          set -e
+
+          while IFS= read -r -d '' project; do
+
+              echo "========================================" 
+              echo "Ejecutando Integration Tests" 
+              echo "Proyecto: $project" 
+              echo "========================================"
+
+              dotnet test "$project" \
+                --no-build \
+                --configuration Release \
+                --collect:"XPlat Code Coverage" \
+                --settings coverlet.runsettings \
+                --results-directory TestResults \
                 --logger "trx"
 
-              if ($LASTEXITCODE -ne 0) {
-                exit $LASTEXITCODE
-              }
-            }
+            done < <( 
+              find tests/Integration \ 
+              -type f \ 
+              -name "*.csproj" \ 
+              -print0 
+            )
 
       # ====================================
       # Finalizar y enviar análisis
       # ====================================
       - name: SonarQube End
-        shell: pwsh
+        shell: bash
         run: |
-          dotnet tool run dotnet-sonarscanner end `
+          set -e
+
+          dotnet tool run dotnet-sonarscanner end \
             /d:sonar.token="$env:SONAR_TOKEN"
 
   deploy:
