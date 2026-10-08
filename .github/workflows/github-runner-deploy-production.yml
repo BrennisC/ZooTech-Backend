@@ -98,6 +98,7 @@ jobs:
         shell: bash
         run: |
           set -e
+
           dotnet tool run dotnet-sonarscanner begin \
             /k:"com.zootech.backend" \
             /n:"ZooTech Backend" \
@@ -190,6 +191,11 @@ jobs:
   deploy:
     name: Deploy via Dockploy
     environment: production-env
+
+    if: >
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main'
+
     needs: quality
     runs-on: self-hosted
     timeout-minutes: 10
