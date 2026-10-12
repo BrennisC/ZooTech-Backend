@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Moq;
 
 using ZooTech.Application.Common.Behaviors;
 using ZooTech.Application.Common.Gateway.Identity;
@@ -32,13 +33,14 @@ public class CeloControllerTests
     {
         var dispatcher = new TestBehaviorDispatcher();
 
-        dispatcher.Setup<EmptyCommandQuery, GetCelosOutput>((_, _) =>
+        dispatcher.Setup<ListCelosQuery, ListCelosOutput>((_, _) =>
             Task.FromResult(
-                new GetCelosOutput(
-                    new List<CeloItemDto>
-                    {
-                        CreateCeloItemDto()
-                    })));
+                new ListCelosOutput(
+                    new ZooTech.Application.Common.Pagination.PagedResult<CeloItemDto>(
+                        new[] { CreateCeloItemDto() },
+                        TotalCount: 1,
+                        Page: 1,
+                        PageSize: 20))));
 
         var controller = CreateController(dispatcher);
 
@@ -48,7 +50,9 @@ public class CeloControllerTests
 
         var okResult = Assert.IsType<OkObjectResult>(result);
 
-        AssertGeneralResponseData<List<CeloItemDto>>(okResult.Value);
+        var response = AssertGeneralResponseData<ListCelosResponse>(okResult.Value);
+        Assert.Single(response.Data);
+        Assert.Equal(1, response.Pagination.Total);
     }
 
     [Fact]
@@ -56,7 +60,7 @@ public class CeloControllerTests
     {
         var dispatcher = new TestBehaviorDispatcher();
 
-        dispatcher.Setup<EmptyCommandQuery, ListReporteCeloGeneralOutput>((_, _) =>
+        dispatcher.Setup<ListReporteCeloGeneralQuery, ListReporteCeloGeneralOutput>((_, _) =>
             Task.FromResult(
                 new ListReporteCeloGeneralOutput(
                     new ZooTech.Application.Common.Pagination.PagedResult<CeloReporteItemDto>(
@@ -440,7 +444,11 @@ public class CeloControllerTests
 
     private static CeloController CreateController(
         IBehaviorDispatcher dispatcher)
-        => new(dispatcher);
+    {
+        var currentUser = new Mock<ICurrentUserService>();
+        currentUser.SetupGet(user => user.UserId).Returns(42);
+        return new CeloController(dispatcher, currentUser.Object);
+    }
 
     private sealed class TestBehaviorDispatcher : IBehaviorDispatcher
     {

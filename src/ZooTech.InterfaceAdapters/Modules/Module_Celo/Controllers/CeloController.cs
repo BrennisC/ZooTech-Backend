@@ -11,6 +11,7 @@ using ZooTech.InterfaceAdapters.Modules.Module_Celo.DTOs.Requests;
 using ZooTech.InterfaceAdapters.Modules.Module_Celo.DTOs.Responses;
 using ZooTech.InterfaceAdapters.Modules.Module_Celo.Mappers;
 using ZooTech.Application.Common.Behaviors;
+using ZooTech.Application.Common.Gateway.Identity;
 using ZooTech.Application.Modules.Module_Celo.UseCases.ListCelos;
 using ZooTech.Application.Modules.Module_Celo.UseCases.GetCelos;
 using ZooTech.Application.Modules.Module_Celo.UseCases.GetReporteCelos;
@@ -29,11 +30,14 @@ namespace ZooTech.InterfaceAdapters.Modules.Module_Celo.Controllers;
 public sealed class CeloController : ControllerBase
 {
     private readonly IBehaviorDispatcher _behaviorDispatcher;
+    private readonly ICurrentUserService _currentUserService;
     public CeloController(
-        IBehaviorDispatcher behaviorDispatcher
+        IBehaviorDispatcher behaviorDispatcher,
+        ICurrentUserService currentUserService
     )
     {
         _behaviorDispatcher = behaviorDispatcher;
+        _currentUserService = currentUserService;
     }
 
     [HttpGet]
@@ -288,7 +292,8 @@ public sealed class CeloController : ControllerBase
         [FromBody] UpdateCeloRequest request,
         CancellationToken cancellationToken)
     {
-        var command = CeloMapper.ToCommand(request , id);
+        var command = CeloMapper.ToCommand(request, id);
+        command.ActorUsuarioId = _currentUserService.UserId;
         var output = await _behaviorDispatcher.Send<UpdateCeloCommand , UpdateCeloOutput>(command, cancellationToken);
         var response = CeloMapper.ToResponse(output);
 
