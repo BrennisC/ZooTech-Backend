@@ -105,7 +105,7 @@ jobs:
             /d:sonar.host.url="$SONAR_HOST_URL" \
             /d:sonar.token="$SONAR_TOKEN" \
             /d:sonar.cs.opencover.reportsPaths="TestResults/**/coverage.opencover.xml" \
-	    /d:sonar.qualitygate.wait=true
+            /d:sonar.qualitygate.wait=true  
 
       # ====================================
       # Compilar para el análisis
