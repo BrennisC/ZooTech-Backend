@@ -27,10 +27,16 @@ namespace ZooTech.Application.Common.Behaviors
 
                 if (errors.Count != 0)
                 {
+                    IReadOnlyList<FieldValidationError> fieldErrors =
+                        validator is IValidationErrorDetailsProvider detailsProvider
+                            ? detailsProvider.GetFieldErrors(errors)
+                            : [];
+
                     throw new ValidationException(
                         errors,
                         ScopeName.Application,
-                        validator.ModuleName);
+                        validator.ModuleName,
+                        fieldErrors);
                 }
             }
 
