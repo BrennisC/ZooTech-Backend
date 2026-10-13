@@ -104,6 +104,7 @@ jobs:
             /n:"ZooTech Backend" \
             /d:sonar.host.url="$SONAR_HOST_URL" \
             /d:sonar.token="$SONAR_TOKEN" \
+            /d:sonar.exclusions="docs/**,imported-attachments/**,scripts/**,docker/**,src/ZooTech.Infrastructure/Persistence/Entities/**,src/ZooTech.Infrastructure/Persistence/Migrations/**" \
             /d:sonar.cs.opencover.reportsPaths="TestResults/**/coverage.opencover.xml" \
             /d:sonar.qualitygate.wait=true  
 
