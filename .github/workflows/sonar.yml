@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   sonarqube:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     steps:
       - name: Checkout code
@@ -28,31 +28,28 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: Set up JDK 21
+      - name: Set up Java 21
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Cache SonarQube packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.sonar/cache
-          key: ${{ runner.os }}-sonar
-          restore-keys: ${{ runner.os }}-sonar
-
-      - name: Install SonarScanner for .NET
-        run: dotnet tool install --global dotnet-sonarscanner
+      - name: Install SonarScanner
+        shell: pwsh
+        run: |
+          dotnet tool install dotnet-sonarscanner --tool-path .sonar/scanner
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          & ".\.sonar\scanner\dotnet-sonarscanner.exe" --version
+          if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - name: Begin SonarQube Analysis
+        shell: pwsh
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         run: |
-          dotnet sonarscanner begin \
-            /k:"mi-proyecto-calidad" \
-            /d:sonar.host.url="$SONAR_HOST_URL" \
-            /d:sonar.token="$SONAR_TOKEN"
+          & ".\.sonar\scanner\dotnet-sonarscanner.exe" begin '/k:mi-proyecto-calidad' "/d:sonar.host.url=$env:SONAR_HOST_URL" "/d:sonar.token=$env:SONAR_TOKEN"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - name: Build project
         run: dotnet build --configuration Release --no-incremental
@@ -61,11 +58,12 @@ jobs:
         run: dotnet test --configuration Release --no-build
 
       - name: End SonarQube Analysis
+        shell: pwsh
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
-          dotnet sonarscanner end \
-            /d:sonar.token="$SONAR_TOKEN"
+          & ".\.sonar\scanner\dotnet-sonarscanner.exe" end "/d:sonar.token=$env:SONAR_TOKEN"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - name: Check Quality Gate
         uses: sonarsource/sonarqube-quality-gate-action@v1.2.0
